@@ -20,7 +20,7 @@ export default function HomePage() {
           </div>
         </div>
         <p className="max-w-xl text-xl leading-9 text-ink/80">面向个人创作者的一体化 AI 工作台：写作、检索、交付、运营一窗收齐。</p>
-        <p className="font-mono text-sm text-muted">搭建中 — 牧之的一件 AI 工程。</p>
+        <p className="font-mono text-sm text-muted">搭建中 — 知末智云的一件 AI 工程。</p>
       </section>
 
       <footer className="flex items-center justify-between border-t-2 border-rule py-5 font-mono text-xs text-muted">

@@ -47,4 +47,4 @@ pnpm typecheck
 - [`zmzai-auth`](https://github.com/zmzai-cloud/zmzai-auth)：单点登录服务；
 - [`zmzai-agent`](https://github.com/zmzai-cloud/zmzai-agent)：Agent 任务与工具执行工作台。
 
-Apache-2.0 · 牧之
+Apache-2.0 · 知末智云
