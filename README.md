@@ -18,7 +18,7 @@
 | `app/page.tsx` | 工作台首页 |
 | `app/layout.tsx` | 页面元信息和全局布局 |
 | `app/globals.css` | 纸面风设计 token |
-| `components/seal.tsx` | 牧之方印 |
+| `@zmzai/theme` | Logo 云朵标 / Wordmark / favicon 等品牌资产 |
 | `components/wordmark.tsx` | `zmzai.cloud` wordmark |
 
 ## 本地运行
@@ -43,8 +43,8 @@ pnpm typecheck
 
 ## 相关仓库
 
-- [`zmzai-cloud`](https://github.com/Ulanxx/zmzai-cloud)：产品矩阵主站；
-- [`zmzai-auth`](https://github.com/Ulanxx/zmzai-auth)：单点登录服务；
-- [`zmzai-agent`](https://github.com/Ulanxx/zmzai-agent)：Agent 任务与工具执行工作台。
+- [`zmzai-cloud`](https://github.com/zmzai-cloud/zmzai-cloud)：产品矩阵主站；
+- [`zmzai-auth`](https://github.com/zmzai-cloud/zmzai-auth)：单点登录服务；
+- [`zmzai-agent`](https://github.com/zmzai-cloud/zmzai-agent)：Agent 任务与工具执行工作台。
 
 Apache-2.0 · 牧之
