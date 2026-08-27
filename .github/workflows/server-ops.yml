@@ -93,6 +93,19 @@ jobs:
               echo "token=$TOKEN"
               ;;
 
+            stats)
+              MURI="$(pick MONGODB_URI "$AGENT")"
+              mongosh "$MURI" --quiet --eval "
+                print('collections: ' + db.getCollectionNames().join(', '));
+                print('tasks=' + db.tasks.countDocuments({}));
+                print('workspaces=' + db.workspaces.countDocuments({}));
+                print('sessions=' + db.sessions.countDocuments({}));
+                print('users=' + db.users.countDocuments({}));
+                const t = db.tasks.find({}).sort({_id:-1}).limit(2).toArray();
+                t.forEach(x => print('task: ' + JSON.stringify({userId: x.userId, status: x.status, title: x.title})));
+              "
+              ;;
+
             cleanup)
               set -e
               MURI="$(pick MONGODB_URI "$AGENT")"
