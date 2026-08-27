@@ -1,0 +1,34 @@
+name: env-inspect
+
+# 一次性诊断：只读核验 HK 服务器上的生产 env 文件（键名可见，值脱敏）。
+# 手动触发，不参与常规部署。
+
+"on":
+  workflow_dispatch: {}
+
+env:
+  HK_HOST: 149.88.84.189
+  HK_USER: root
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect server env files (keys only, values redacted)
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.HK_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new ${HK_USER}@${HK_HOST} '
+            echo "=== /opt/zmzai/envs ==="
+            ls -la /opt/zmzai/envs/ 2>&1
+            for f in /opt/zmzai/envs/workos/.env.production /opt/zmzai/envs/agent/.env.production; do
+              echo "=== $f ==="
+              if [ -f "$f" ]; then
+                grep -vE "^\s*#|^\s*$" "$f" | sed -E "s/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1=<redacted>/"
+              else
+                echo "MISSING"
+              fi
+            done
+          '
