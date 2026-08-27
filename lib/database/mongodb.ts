@@ -9,8 +9,10 @@ const cache = globalMongo.__zmzaiWorkosMongo ?? { connection: null, pending: nul
 globalMongo.__zmzaiWorkosMongo = cache;
 
 export async function connectMongo(): Promise<typeof mongoose> {
+  const environment = getServerEnvironment();
+  if (!environment) throw new Error("[workos] env 未配置（MONGODB_URI 缺失），无法连接数据库");
   if (cache.connection) return cache.connection;
-  cache.pending ??= mongoose.connect(getServerEnvironment().MONGODB_URI, { serverSelectionTimeoutMS: 8_000 });
+  cache.pending ??= mongoose.connect(environment.MONGODB_URI, { serverSelectionTimeoutMS: 8_000 });
   try {
     cache.connection = await cache.pending;
     return cache.connection;

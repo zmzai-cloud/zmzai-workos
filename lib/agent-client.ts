@@ -31,6 +31,7 @@ function asString(value: unknown): string {
 export async function fetchAgentSummary(userId: string): Promise<AgentSummary> {
   const environment = getServerEnvironment();
   const empty: AgentSummary = { tasks: [], workspaces: [], ok: false };
+  if (!environment) return empty;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5_000);
   try {

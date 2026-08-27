@@ -19,9 +19,20 @@ const environmentSchema = z.object({
 
 export type ServerEnvironment = z.infer<typeof environmentSchema>;
 
-let cachedEnvironment: ServerEnvironment | undefined;
+let cachedEnvironment: ServerEnvironment | null | undefined;
 
-export function getServerEnvironment(): ServerEnvironment {
-  cachedEnvironment ??= environmentSchema.parse(process.env);
+/**
+ * 安全读取服务端环境。env 缺失/非法时不再让整站 500：
+ * 返回 null，调用方降级为访客态（首页可渲染，dashboard 跳登录）。
+ */
+export function getServerEnvironment(): ServerEnvironment | null {
+  if (cachedEnvironment !== undefined) return cachedEnvironment;
+  const parsed = environmentSchema.safeParse(process.env);
+  if (!parsed.success) {
+    console.error("[workos] env 校验失败，以访客态降级运行：", z.prettifyError(parsed.error));
+    cachedEnvironment = null;
+  } else {
+    cachedEnvironment = parsed.data;
+  }
   return cachedEnvironment;
 }

@@ -33,11 +33,11 @@ function relativeTime(iso: string): string {
 }
 
 async function loginRedirectUrl(): Promise<string> {
-  const environment = getServerEnvironment();
+  const loginUrl = getServerEnvironment()?.AUTH_LOGIN_URL ?? "https://auth.zmzai.cloud/login";
   const headerList = await headers();
   const host = headerList.get("host") ?? "i.zmzai.cloud";
   const proto = headerList.get("x-forwarded-proto") ?? "https";
-  return `${environment.AUTH_LOGIN_URL}?next=${encodeURIComponent(`${proto}://${host}/dashboard`)}`;
+  return `${loginUrl}?next=${encodeURIComponent(`${proto}://${host}/dashboard`)}`;
 }
 
 export default async function DashboardPage() {

@@ -14,6 +14,7 @@ export type CurrentUser = {
 /** 校验 muzhi_session cookie（同库同 AUTH_SECRET，拒绝规则逐行对齐 zmzai-agent/lib/auth/session.ts）。 */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const environment = getServerEnvironment();
+  if (!environment) return null;
   const token = (await cookies()).get(environment.SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
 
