@@ -1,0 +1,91 @@
+name: server-ops
+
+# 临时运维 workflow：workos 生产 env 补齐 + 终验 session 铸造/清理。
+# 密码经 workflow_dispatch input 传入，不写入仓库。终验后本文件将被删除。
+
+"on":
+  workflow_dispatch:
+    inputs:
+      password:
+        description: SSH password
+        required: true
+      task:
+        description: task
+        required: true
+        type: choice
+        options: [status, setup, mint, cleanup]
+      value:
+        description: optional value (cleanup: session token)
+        required: false
+
+jobs:
+  ops:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
+
+      - name: Run task on HK server
+        env:
+          SSHPASS: ${{ inputs.password }}
+          TASK: ${{ inputs.task }}
+          VALUE: ${{ inputs.value }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=no root@149.88.84.189 "TASK=$TASK VALUE='$VALUE' bash -s" <<'REMOTE'
+          set -u
+          AGENT=/opt/zmzai/envs/agent/.env.production
+          WOS=/opt/zmzai/envs/workos/.env.production
+          pick() { grep -E "^$1=" "$2" | head -1 | cut -d= -f2-; }
+
+          case "$TASK" in
+            status)
+              echo "--- workos env ---"
+              if [ -f "$WOS" ]; then grep -oE '^[A-Za-z_]+=' "$WOS"; else echo MISSING; fi
+              echo "--- agent env workos secret ---"
+              grep -c '^WORKOS_SERVICE_SECRET_CURRENT=' "$AGENT" || true
+              echo "--- mongosh availability ---"
+              command -v mongosh || echo NO_MONGOSH
+              command -v node || echo NO_NODE
+              ;;
+
+            setup)
+              set -e
+              [ -f "$AGENT" ] || { echo "AGENT ENV MISSING"; exit 1; }
+              mkdir -p "$(dirname "$WOS")"
+              cp "$AGENT" "$AGENT.bak-workos-$(date +%s)"
+              grep -E '^(MONGODB_URI|AUTH_SECRET|SESSION_COOKIE_NAME)=' "$AGENT" > "$WOS"
+              printf 'AGENT_INTERNAL_URL=https://a.zmzai.cloud\nWORKOS_SERVICE_SECRET_CURRENT=%s\n' "$(openssl rand -hex 32)" >> "$WOS"
+              grep -q '^WORKOS_SERVICE_SECRET_CURRENT=' "$AGENT" || tail -1 "$WOS" >> "$AGENT"
+              chmod 600 "$WOS"
+              echo "=== workos env keys ==="
+              grep -oE '^[A-Za-z_]+=' "$WOS"
+              echo "=== agent env tail keys ==="
+              grep -oE '^[A-Za-z_]+=' "$AGENT" | tail -2
+              ;;
+
+            mint)
+              set -e
+              MURI="$(pick MONGODB_URI "$AGENT")"
+              ASEC="$(pick AUTH_SECRET "$AGENT")"
+              TOKEN="$(openssl rand -hex 24)"
+              HASH="$(printf '%s:%s' "$ASEC" "$TOKEN" | sha256sum | cut -d' ' -f1)"
+              mongosh "$MURI" --quiet --eval "
+                print('db=' + db.getName());
+                const u = db.users.find({ status: 'active' }).sort({ _id: -1 }).limit(1).toArray();
+                if (!u.length) { print('NO_USER'); quit(1); }
+                db.sessions.insertOne({ tokenHash: '$HASH', userId: u[0]._id, expiresAt: new Date(Date.now() + 6 * 3600 * 1000), createdAt: new Date() });
+                print('uid=' + u[0]._id.valueOf());
+              "
+              echo "token=$TOKEN"
+              ;;
+
+            cleanup)
+              set -e
+              MURI="$(pick MONGODB_URI "$AGENT")"
+              ASEC="$(pick AUTH_SECRET "$AGENT")"
+              HASH="$(printf '%s:%s' "$ASEC" "$VALUE" | sha256sum | cut -d' ' -f1)"
+              mongosh "$MURI" --quiet --eval "db.sessions.deleteOne({ tokenHash: '$HASH' }); print('deleted');"
+              ;;
+          esac
+          REMOTE
