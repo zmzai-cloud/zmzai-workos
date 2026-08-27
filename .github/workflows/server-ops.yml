@@ -15,7 +15,7 @@ name: server-ops
         type: choice
         options: [status, setup, mint, cleanup]
       value:
-        description: optional value (cleanup: session token)
+        description: "optional value (cleanup: session token)"
         required: false
 
 jobs:
