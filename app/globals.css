@@ -98,6 +98,87 @@
   .btn-primary:hover {
     background: var(--color-accent-strong);
   }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 1rem;
+    border: 1px solid var(--color-rule);
+    border-radius: 0;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    transition: border-color var(--animate-dur-base) var(--ease-out);
+  }
+
+  .btn-ghost:hover {
+    border-color: var(--color-accent);
+  }
+
+  /* Dashboard 模块卡 */
+  .module {
+    padding-top: 1rem;
+  }
+
+  /* 状态 Badge（任务五态） */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--color-rule);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .badge-accent {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .badge-ink {
+    border-color: var(--color-ink);
+    color: var(--color-ink);
+  }
+
+  .badge-danger {
+    border-color: #b42318;
+    color: #b42318;
+  }
+
+  .badge-muted {
+    color: var(--color-muted);
+  }
+
+  /* 产品入口卡（首页 + dashboard 复用） */
+  .entry {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    border: 1px solid var(--color-rule);
+    padding: 0.875rem 1rem;
+    font-size: 0.875rem;
+    transition: border-color var(--animate-dur-base) var(--ease-out);
+  }
+
+  .entry:hover {
+    border-color: var(--color-accent);
+  }
+
+  .entry span {
+    color: var(--color-muted);
+    font-size: 0.8125rem;
+  }
+
+  .empty-note {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+    font-size: 0.875rem;
+    color: var(--color-muted);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
