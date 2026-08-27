@@ -96,13 +96,12 @@ jobs:
             stats)
               MURI="$(pick MONGODB_URI "$AGENT")"
               mongosh "$MURI" --quiet --eval "
-                print('collections: ' + db.getCollectionNames().join(', '));
-                print('tasks=' + db.tasks.countDocuments({}));
-                print('workspaces=' + db.workspaces.countDocuments({}));
-                print('sessions=' + db.sessions.countDocuments({}));
-                print('users=' + db.users.countDocuments({}));
-                const t = db.tasks.find({}).sort({_id:-1}).limit(2).toArray();
-                t.forEach(x => print('task: ' + JSON.stringify({userId: x.userId, status: x.status, title: x.title})));
+                print('tasks=' + db.zmzaiagenttasks.countDocuments({}));
+                print('workspaces=' + db.zmzaiagentworkspaces.countDocuments({}));
+                const t = db.zmzaiagenttasks.find({}).sort({_id:-1}).limit(5).toArray();
+                t.forEach(x => print('task: ' + JSON.stringify({userId: String(x.userId), status: x.status, title: (x.title||'').slice(0,30)})));
+                const w = db.zmzaiagentworkspaces.find({}).limit(5).toArray();
+                w.forEach(x => print('ws: ' + JSON.stringify({userId: String(x.userId), name: x.name, kb: (x.knowledgeBase||[]).length})));
               "
               ;;
 
