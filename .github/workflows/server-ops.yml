@@ -72,10 +72,23 @@ jobs:
               HASH="$(printf '%s:%s' "$ASEC" "$TOKEN" | sha256sum | cut -d' ' -f1)"
               mongosh "$MURI" --quiet --eval "
                 print('db=' + db.getName());
-                const u = db.users.find({ status: 'active' }).sort({ _id: -1 }).limit(1).toArray();
-                if (!u.length) { print('NO_USER'); quit(1); }
-                db.sessions.insertOne({ tokenHash: '$HASH', userId: u[0]._id, expiresAt: new Date(Date.now() + 6 * 3600 * 1000), createdAt: new Date() });
-                print('uid=' + u[0]._id.valueOf());
+                // 优先选最近有任务的 active 用户（终验需要真实数据）；否则回退到最近的 active 用户。
+                let uid = null;
+                const t = db.tasks.find({}, { userId: 1 }).sort({ _id: -1 }).limit(1).toArray();
+                if (t.length) {
+                  const tu = db.users.findOne({ _id: t[0].userId, status: 'active' });
+                  if (tu) uid = tu._id;
+                }
+                if (!uid) {
+                  const any = db.users.find({ status: 'active' }).sort({ _id: -1 }).limit(1).toArray();
+                  if (!any.length) { print('NO_USER'); quit(1); }
+                  uid = any[0]._id;
+                }
+                const taskCount = db.tasks.countDocuments({ userId: uid });
+                const wsCount = db.workspaces.countDocuments({ userId: uid });
+                print('data=' + taskCount + ' tasks, ' + wsCount + ' workspaces');
+                db.sessions.insertOne({ tokenHash: '$HASH', userId: uid, expiresAt: new Date(Date.now() + 6 * 3600 * 1000), createdAt: new Date() });
+                print('uid=' + uid.valueOf());
               "
               echo "token=$TOKEN"
               ;;
