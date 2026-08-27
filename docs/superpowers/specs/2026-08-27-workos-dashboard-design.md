@@ -89,7 +89,7 @@ zmzai-agent 生产 env 追加：`WORKOS_SERVICE_SECRET_CURRENT`（+ 可选 `_PRE
 
 ## 错误处理
 
-- session 无效/过期 → dashboard 302 登录；
+- session 无效/过期 → dashboard 服务端 `redirect()` 跳登录（默认 307，同上）；
 - Agent API 401/超时/网络错误 → 模块区空态 + 「Agent 服务暂不可达」副文案（服务端 console.error 记录）；
 - Agent 返回数据字段缺失 → 用 zod（agent 已有依赖；workos 侧手写防御性解析即可，避免额外依赖）容错，缺失字段按空态渲染。
 
