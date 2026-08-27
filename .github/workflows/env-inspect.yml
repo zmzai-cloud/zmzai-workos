@@ -1,7 +1,6 @@
 name: env-inspect
 
-# 一次性诊断：HK 服务器为 ForceCommand 受限 SSH（仅 store/deploy/envget 白名单命令），
-# 故通过 envget 读取生产 env，输出前在 runner 侧脱敏（只留键名），原始值不进日志。
+# 一次性诊断：探测 HK 服务器受限 CLI 的可用命令（usage 输出），为补齐 env 定路径。
 # 手动触发，不参与常规部署。
 
 "on":
@@ -16,14 +15,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Read env via envget, redact values
+      - name: Probe CLI usage
         run: |
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.HK_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new ${HK_USER}@${HK_HOST} "envget workos" > /tmp/workos.env || echo "envget workos FAILED"
-          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new ${HK_USER}@${HK_HOST} "envget agent" > /tmp/agent.env || echo "envget agent FAILED"
-          for f in /tmp/workos.env /tmp/agent.env; do
-            echo "=== $f ==="
-            grep -vE "^\s*#|^\s*$" "$f" 2>/dev/null | sed -E "s/^([A-Za-z_][A-Za-z0-9_]*)=.*/\1=<redacted>/" || echo "EMPTY/MISSING"
-          done
+          SSH="ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new ${HK_USER}@${HK_HOST}"
+          echo "=== probe: envget (no args) ==="
+          $SSH "envget" 2>&1 | head -20 || true
+          echo "=== probe: deploy-targets hint (bad tool) ==="
+          $SSH "zzz-probe" 2>&1 | head -20 || true
+          echo "=== probe: envset exists? ==="
+          $SSH "envset" 2>&1 | head -20 || true
