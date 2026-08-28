@@ -102,6 +102,11 @@ jobs:
                 t.forEach(x => print('task: ' + JSON.stringify({userId: String(x.userId), status: x.status, title: (x.title||'').slice(0,30)})));
                 const w = db.zmzaiagentworkspaces.find({}).limit(5).toArray();
                 w.forEach(x => print('ws: ' + JSON.stringify({userId: String(x.userId), name: x.name, kb: (x.knowledgeBase||[]).length})));
+                const u = db.users.findOne({_id: ObjectId('6a72e02e7b602a38783b1136')});
+                if (u) print('user6a72: ' + JSON.stringify({status: u.status, role: u.role, emailVerified: u.emailVerified, email: u.email}));
+                else print('user6a72: NOT FOUND');
+                const s = db.zmzaiagenttasks.findOne({});
+                print('task userId type: ' + (s ? typeof s.userId + ' / ' + (s.userId.constructor ? s.userId.constructor.name : 'plain') : 'none'));
               "
               ;;
 
