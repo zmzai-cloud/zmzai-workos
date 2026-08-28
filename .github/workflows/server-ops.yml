@@ -74,7 +74,7 @@ jobs:
                 print('db=' + db.getName());
                 // 优先选最近有任务的 active 用户（终验需要真实数据）；否则回退到最近的 active 用户。
                 let uid = null;
-                const t = db.tasks.find({}, { userId: 1 }).sort({ _id: -1 }).limit(1).toArray();
+                const t = db.zmzaiagenttasks.find({}, { userId: 1 }).sort({ _id: -1 }).limit(1).toArray();
                 if (t.length) {
                   const tu = db.users.findOne({ _id: t[0].userId, status: 'active' });
                   if (tu) uid = tu._id;
