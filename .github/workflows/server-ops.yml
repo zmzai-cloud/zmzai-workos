@@ -76,7 +76,7 @@ jobs:
                 let uid = null;
                 const t = db.zmzaiagenttasks.find({}, { userId: 1 }).sort({ _id: -1 }).limit(1).toArray();
                 if (t.length) {
-                  const tu = db.users.findOne({ _id: t[0].userId, status: 'active' });
+                  const tu = db.users.findOne({ _id: ObjectId(t[0].userId.valueOf()), status: 'active' });
                   if (tu) uid = tu._id;
                 }
                 if (!uid) {
