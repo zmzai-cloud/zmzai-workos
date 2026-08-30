@@ -20,7 +20,7 @@ export default async function HomePage() {
   return (
     <main className="page-shell flex min-h-dvh flex-col">
       <Navbar
-        sublabel="workos"
+        sublabel="index"
         brandHref="/"
         badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">i.zmzai.cloud</span>}
       />
