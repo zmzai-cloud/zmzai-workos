@@ -20,7 +20,7 @@ export default async function HomePage() {
   return (
     <main className="page-shell flex min-h-dvh flex-col">
       <Navbar
-        sublabel="index"
+        sublabel="Index"
         brandHref="/"
         badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">i.zmzai.cloud</span>}
       />
@@ -36,7 +36,7 @@ export default async function HomePage() {
         <p className="max-w-xl text-xl leading-9 text-ink/80">面向个人创作者的一体化 AI 工作台：任务、知识、产品入口一窗收齐。</p>
         <div className="flex items-center gap-4">
           <Link href={ctaHref} className="btn-primary h-10">{user ? "进入工作台" : "登录"}</Link>
-          <span className="font-mono text-sm text-muted">牧之 的一件 AI 工程 · 知末智云</span>
+          <span className="font-mono text-sm text-ink-2">牧之 的一件 AI 工程 · 知末智云</span>
         </div>
       </section>
 
@@ -45,12 +45,12 @@ export default async function HomePage() {
           <Link key={product.href} href={product.href} className="entry">
             <strong>{product.name}</strong>
             <span>{product.desc}</span>
-            <span className="font-mono text-[11px] text-muted">{product.href.replace("https://", "")}</span>
+            <span className="font-mono text-[11px] text-ink-2">{product.href.replace("https://", "")}</span>
           </Link>
         ))}
       </section>
 
-      <footer className="flex items-center justify-between border-t-2 border-rule py-5 font-mono text-xs text-muted">
+      <footer className="flex items-center justify-between border-t-2 border-rule py-5 font-mono text-xs text-ink-2">
         <span>牧之 署名 · zmzai cloud</span>
         <Link href="https://zmzai.cloud" className="transition-colors hover:text-accent">← 回产品矩阵</Link>
       </footer>

@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@zmzai/db": "^0.1.0",
-    "@zmzai/theme": "^0.9.3",
+    "@zmzai/theme": "^0.9.10",
     "mongodb": "^7.5.0",
     "mongoose": "^9.9.1",
     "next": "15.5.21",

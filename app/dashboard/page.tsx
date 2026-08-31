@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { Navbar } from "@zmzai/theme";
+import { Navbar, PageHeader } from "@zmzai/theme";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { fetchAgentSummary } from "@/lib/agent-client";
@@ -49,23 +49,25 @@ export default async function DashboardPage() {
   return (
     <main className="page-shell flex min-h-dvh flex-col">
       <Navbar
-        sublabel="index"
+        sublabel="Index"
         brandHref="/"
         badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">i.zmzai.cloud</span>}
       />
 
-      <section className="rule-top flex flex-wrap items-end justify-between gap-4 py-8">
-        <div className="flex flex-col gap-1">
-          <p className="eyebrow">dashboard</p>
-          <h1 className="headline text-3xl sm:text-4xl">{user.name} 的工作台</h1>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="font-mono text-xs text-muted">{user.email}</span>
-          <form action="/logout" method="post">
-            <button type="submit" className="btn-ghost h-10">退出登录</button>
-          </form>
-        </div>
-      </section>
+      <PageHeader
+        icon="gauge"
+        eyebrow="dashboard"
+        title={`${user.name} 的工作台`}
+        className="rule-top py-8"
+        actions={
+          <div className="flex items-center gap-4">
+            <span className="font-mono text-xs text-ink-2">{user.email}</span>
+            <form action="/logout" method="post">
+              <button type="submit" className="btn-ghost h-10">退出登录</button>
+            </form>
+          </div>
+        }
+      />
 
       <section className="grid flex-1 content-start gap-6 pb-16 lg:grid-cols-[1.2fr_1fr]">
         <div className="module rule-top">
@@ -85,7 +87,7 @@ export default async function DashboardPage() {
                     <span className={STATUS_BADGE[task.status] ?? "badge badge-muted"}>{task.status}</span>
                     <span className="truncate text-sm text-ink/90">{task.title}</span>
                   </div>
-                  <span className="shrink-0 font-mono text-xs text-muted">{relativeTime(task.updatedAt)}</span>
+                  <span className="shrink-0 font-mono text-xs text-ink-2">{relativeTime(task.updatedAt)}</span>
                 </li>
               ))}
             </ul>
@@ -117,7 +119,7 @@ export default async function DashboardPage() {
                 {summary.workspaces.map((workspace) => (
                   <li key={workspace.workspaceId} className="flex items-center justify-between gap-3 py-3">
                     <span className="truncate text-sm text-ink/90">{workspace.name}</span>
-                    <span className="shrink-0 font-mono text-xs text-muted">{workspace.knowledgeCount} 条</span>
+                    <span className="shrink-0 font-mono text-xs text-ink-2">{workspace.knowledgeCount} 条</span>
                   </li>
                 ))}
               </ul>
@@ -126,7 +128,7 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      <footer className="flex items-center justify-between border-t-2 border-rule py-5 font-mono text-xs text-muted">
+      <footer className="flex items-center justify-between border-t-2 border-rule py-5 font-mono text-xs text-ink-2">
         <span>牧之 署名 · zmzai cloud</span>
         <Link href="https://zmzai.cloud" className="transition-colors hover:text-accent">← 回产品矩阵</Link>
       </footer>
