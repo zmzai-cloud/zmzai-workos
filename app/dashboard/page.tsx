@@ -61,6 +61,12 @@ export default async function DashboardPage() {
     console.error("[workos] goal queue load failed", error);
     return [];
   });
+  const queueItems = goals.length > 0
+    ? goals.map((goal) => ({ id: goal.goalId, title: goal.title, status: goal.status, updatedAt: goal.lastSyncedAt, nextStep: goal.attentionReason ?? (goal.status === "in_progress" ? "Agent 正在执行，结果会进入收件箱。" : "查看工作详情，继续推进。") }))
+    : summary.tasks.map((task) => ({ id: task.taskId, title: task.title, status: task.runStatus === "waiting_approval" || task.runStatus === "waiting_input" ? "needs_attention" : task.status === "active" ? "in_progress" : task.status === "succeeded" ? "completed" : task.status === "failed" ? "failed" : "queued", updatedAt: task.updatedAt, nextStep: task.attention ?? (task.status === "active" ? "Agent 正在执行，结果会进入收件箱。" : "查看工作详情，继续推进。") }));
+  const primary = queueItems.find((item) => item.status === "in_progress") ?? queueItems.find((item) => item.status === "needs_attention") ?? queueItems[0];
+  const attention = queueItems.find((item) => item.id !== primary?.id && (item.status === "needs_attention" || item.status === "blocked"));
+  const completed = queueItems.find((item) => item.id !== primary?.id && item.status === "completed");
 
   return (
     <WorkosShell userName={user.name} email={user.email}>
@@ -74,51 +80,27 @@ export default async function DashboardPage() {
 
       <GoalForm workspaces={summary.workspaces} />
 
-      <section className="mt-6 grid content-start gap-6 pb-16 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.8fr)]">
-        <Card padding="none" className="overflow-hidden">
-          <CardHeader>
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">推进队列</p>
-              <h2 className="mt-1 text-base font-semibold text-ink">正在进行的工作</h2>
-            </div>
-            <Link href="https://a.zmzai.cloud" className="inline-flex items-center gap-1 text-xs text-ink-2 transition-colors hover:text-ink">
-              在 Agent 中打开 <Icon name="arrow-up-right" size={13} />
-            </Link>
-          </CardHeader>
-          {goals.length === 0 && summary.tasks.length === 0 ? (
-            <EmptyState
-              title={summary.ok ? "还没有进行中的工作" : "Agent 状态暂不可达"}
-              description={summary.ok ? "在 Agent 中创建任务后，它会在这里持续更新。" : "稍后重试。已有任务不会被空数据覆盖。"}
-              className="py-14"
-            />
-          ) : goals.length > 0 ? (
-            <ul className="flex flex-col divide-y-2 divide-rule">
-              {goals.map((goal) => (
-                <li key={goal.goalId} className="flex items-center justify-between gap-3 px-4 py-3.5">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <Badge {...GOAL_BADGE[goal.status]} size="sm" />
-                    <div className="min-w-0"><span className="block truncate text-sm text-ink/90">{goal.title}</span>{goal.attentionReason ? <span className="block truncate text-xs text-warning">{goal.attentionReason}</span> : null}</div>
-                  </div>
-                  <span className="shrink-0 font-mono text-xs text-ink-2">{relativeTime(goal.lastSyncedAt)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <ul className="flex flex-col divide-y-2 divide-rule">
-              {summary.tasks.map((task) => (
-                <li key={task.taskId} className="flex items-center justify-between gap-3 px-4 py-3.5">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <Badge {...(STATUS_BADGE[task.status] ?? { label: task.status || "未知", variant: "outline" })} size="sm" />
-                    <span className="truncate text-sm text-ink/90">{task.title}</span>
-                  </div>
-                  <span className="shrink-0 font-mono text-xs text-ink-2">{relativeTime(task.updatedAt)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+      <section className={`mt-6 grid content-start gap-6 pb-16 ${summary.workspaces.length > 0 ? "xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.8fr)]" : "max-w-4xl"}`}>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-end justify-between gap-3 px-1">
+            <div><p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">今日工作</p><h2 className="mt-1 font-serif text-2xl font-bold tracking-tight text-ink">正在推进</h2></div>
+            <Link href="https://a.zmzai.cloud" className="inline-flex items-center gap-1 text-xs text-ink-2 transition-colors hover:text-ink">全部工作 <Icon name="arrow-up-right" size={13} /></Link>
+          </div>
+          {queueItems.length === 0 ? <Card padding="none"><EmptyState title={summary.ok ? "还没有进行中的工作" : "Agent 状态暂不可达"} description={summary.ok ? "在 Agent 中创建任务后，它会在这里持续更新。" : "稍后重试。已有任务不会被空数据覆盖。"} className="py-14" /></Card> : primary ? <>
+            <Card variant="surface" padding="lg">
+              <div className="flex items-center justify-between gap-4"><Badge {...(GOAL_BADGE[primary.status] ?? { label: "处理中", variant: "outline" })} size="sm" /><span className="font-mono text-[11px] text-ink-3">{relativeTime(primary.updatedAt)}</span></div>
+              <h3 className="mt-5 font-serif text-2xl font-bold leading-snug tracking-tight text-ink">{primary.title}</h3>
+              <p className="mt-3 max-w-xl text-sm leading-6 text-ink-2">{primary.nextStep}</p>
+              <Link href="https://a.zmzai.cloud" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-ink transition-colors hover:text-ink-2">查看进度 <Icon name="arrow-right" size={14} /></Link>
+            </Card>
+            {(attention || completed) ? <div className="grid gap-3 sm:grid-cols-2">
+              {attention ? <Card padding="md"><Badge {...(GOAL_BADGE[attention.status] ?? { label: "等我处理", variant: "warning" })} size="sm" /><h3 className="mt-3 text-sm font-semibold text-ink">{attention.title}</h3><p className="mt-1 text-xs leading-5 text-ink-2">{attention.nextStep}</p></Card> : null}
+              {completed ? <Card padding="md"><Badge {...(GOAL_BADGE[completed.status] ?? { label: "已完成", variant: "success" })} size="sm" /><h3 className="mt-3 text-sm font-semibold text-ink">{completed.title}</h3><p className="mt-1 text-xs leading-5 text-ink-2">结果已就绪，可查看或作为下一目标的上下文。</p></Card> : null}
+            </div> : null}
+          </> : null}
+        </div>
 
-        <div className="flex flex-col gap-6">
+        {summary.workspaces.length > 0 ? <div className="flex flex-col gap-4 pt-8 xl:pt-0">
           <Card padding="none" id="knowledge">
             <CardHeader>
               <div>
@@ -145,11 +127,7 @@ export default async function DashboardPage() {
             )}
           </Card>
 
-          <Card variant="surface" padding="md" id="projects">
-            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">项目</p>
-            <p className="mt-2 text-sm text-ink-2">项目、目标与产物的关联层将在目标创建功能中接入。</p>
-          </Card>
-        </div>
+        </div> : null}
       </section>
     </WorkosShell>
   );
