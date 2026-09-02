@@ -8,6 +8,8 @@ export type AgentTask = {
   status: string;
   workspaceId: string;
   updatedAt: string;
+  runStatus: string | null;
+  attention: string | null;
 };
 
 export type AgentWorkspace = {
@@ -61,6 +63,8 @@ export async function fetchAgentSummary(userId: string): Promise<AgentSummary> {
           status: asString(record.status),
           workspaceId: asString(record.workspaceId),
           updatedAt: asString(record.updatedAt),
+          runStatus: typeof record.runStatus === "string" ? record.runStatus : null,
+          attention: typeof record.attention === "string" ? record.attention : null,
         };
       }).filter((task) => task.taskId !== ""),
       workspaces: workspaces.map((workspace) => {

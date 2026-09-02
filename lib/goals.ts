@@ -11,9 +11,13 @@ export type GoalView = {
   agentTaskId: string;
   updatedAt: string;
   lastSyncedAt: string;
+  attentionReason: string | null;
 };
 
-function stateForAgentTask(status: string): GoalState {
+function stateForAgentTask(task: AgentTask): GoalState {
+  if (task.runStatus === "waiting_approval" || task.runStatus === "waiting_input") return "needs_attention";
+  if (task.runStatus === "paused") return "blocked";
+  const status = task.status;
   if (status === "active") return "in_progress";
   if (status === "succeeded") return "completed";
   if (status === "failed") return "failed";
@@ -33,13 +37,14 @@ export async function listGoalsForDashboard(input: { userId: string; tasks: Agen
     await Promise.all(goals.map(async (goal) => {
       const task = tasks.get(goal.agentTaskId);
       if (!task) return;
-      const status = stateForAgentTask(task.status);
+      const status = stateForAgentTask(task);
       const syncedAt = new Date(task.updatedAt);
       const lastSyncedAt = Number.isNaN(syncedAt.getTime()) ? new Date() : syncedAt;
-      if (goal.status !== status || goal.lastSyncedAt.getTime() !== lastSyncedAt.getTime()) {
-        await GoalModel.updateOne({ goalId: goal.goalId }, { $set: { status, lastSyncedAt } });
+      if (goal.status !== status || goal.lastSyncedAt.getTime() !== lastSyncedAt.getTime() || goal.attentionReason !== task.attention) {
+        await GoalModel.updateOne({ goalId: goal.goalId }, { $set: { status, lastSyncedAt, attentionReason: task.attention } });
         goal.status = status;
         goal.lastSyncedAt = lastSyncedAt;
+        goal.attentionReason = task.attention;
       }
     }));
   }
@@ -50,5 +55,6 @@ export async function listGoalsForDashboard(input: { userId: string; tasks: Agen
     agentTaskId: goal.agentTaskId,
     updatedAt: goal.updatedAt.toISOString(),
     lastSyncedAt: goal.lastSyncedAt.toISOString(),
+    attentionReason: goal.attentionReason ?? null,
   }));
 }

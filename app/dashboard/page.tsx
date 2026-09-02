@@ -97,7 +97,7 @@ export default async function DashboardPage() {
                 <li key={goal.goalId} className="flex items-center justify-between gap-3 px-4 py-3.5">
                   <div className="flex min-w-0 items-center gap-3">
                     <Badge {...GOAL_BADGE[goal.status]} size="sm" />
-                    <span className="truncate text-sm text-ink/90">{goal.title}</span>
+                    <div className="min-w-0"><span className="block truncate text-sm text-ink/90">{goal.title}</span>{goal.attentionReason ? <span className="block truncate text-xs text-warning">{goal.attentionReason}</span> : null}</div>
                   </div>
                   <span className="shrink-0 font-mono text-xs text-ink-2">{relativeTime(goal.lastSyncedAt)}</span>
                 </li>

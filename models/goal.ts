@@ -11,6 +11,7 @@ const goalSchema = new Schema(
     agentTaskId: { type: String, required: true, immutable: true },
     agentRunId: { type: String, required: true, immutable: true },
     status: { type: String, enum: ["queued", "in_progress", "needs_attention", "blocked", "completed", "failed"], required: true, default: "queued" },
+    attentionReason: { type: String, default: null, maxlength: 500 },
     lastSyncedAt: { type: Date, required: true },
   },
   { strict: "throw", timestamps: true },
