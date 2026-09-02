@@ -8,6 +8,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { fetchAgentSummary } from "@/lib/agent-client";
 import { getServerEnvironment } from "@/config/env";
 import { WorkosShell } from "@/components/workos-shell";
+import { GoalForm } from "@/components/goal-form";
 
 export const dynamic = "force-dynamic";
 
@@ -55,14 +56,11 @@ export default async function DashboardPage() {
         title="今日工作"
         description="从一个目标开始，持续推进 Agent 正在完成的工作。"
         className="pb-8"
-        actions={
-          <div className="rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink-2">
-            目标创建即将接入
-          </div>
-        }
       />
 
-      <section className="grid content-start gap-6 pb-16 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.8fr)]">
+      <GoalForm workspaces={summary.workspaces} />
+
+      <section className="mt-6 grid content-start gap-6 pb-16 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.8fr)]">
         <Card padding="none" className="overflow-hidden">
           <CardHeader>
             <div>

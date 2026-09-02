@@ -1,5 +1,7 @@
 import { getServerEnvironment } from "@/config/env";
 
+export type CreateAgentTaskInput = { userId: string; workspaceId: string; goal: string; title?: string; idempotencyKey: string };
+
 export type AgentTask = {
   taskId: string;
   title: string;
@@ -78,4 +80,25 @@ export async function fetchAgentSummary(userId: string): Promise<AgentSummary> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** 代表已验证的 workos 用户创建 Agent 任务；任务执行仍只发生在 Agent。 */
+export async function createAgentTask(input: CreateAgentTaskInput): Promise<{ taskId: string; runId: string }> {
+  const environment = getServerEnvironment();
+  if (!environment) throw new Error("workos 环境未配置");
+  const response = await fetch(new URL("/api/internal/workos/tasks", environment.AGENT_INTERNAL_URL), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${environment.WORKOS_SERVICE_SECRET_CURRENT}`,
+      "content-type": "application/json",
+      "idempotency-key": input.idempotencyKey,
+    },
+    cache: "no-store",
+    body: JSON.stringify({ userId: input.userId, workspaceId: input.workspaceId, goal: input.goal, ...(input.title ? { title: input.title } : {}) }),
+  });
+  const body = await response.json().catch(() => null) as { taskId?: unknown; runId?: unknown; error?: unknown } | null;
+  if (!response.ok || typeof body?.taskId !== "string" || typeof body.runId !== "string") {
+    throw new Error(typeof body?.error === "string" ? body.error : "Agent 暂时无法创建任务");
+  }
+  return { taskId: body.taskId, runId: body.runId };
 }
