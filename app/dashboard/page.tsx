@@ -2,13 +2,14 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { Badge, Card, CardBody, CardHeader, EmptyState, Icon, PageHeader } from "@zmzai/theme";
+import { Badge, Card, CardHeader, EmptyState, Icon, PageHeader } from "@zmzai/theme";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { fetchAgentSummary } from "@/lib/agent-client";
 import { getServerEnvironment } from "@/config/env";
 import { WorkosShell } from "@/components/workos-shell";
 import { GoalForm } from "@/components/goal-form";
+import { listGoalsForDashboard } from "@/lib/goals";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,15 @@ const STATUS_BADGE: Record<string, { label: string; variant: "live" | "success" 
   failed: { label: "失败", variant: "danger" },
   draft: { label: "待开始", variant: "outline" },
   cancelled: { label: "已取消", variant: "outline" },
+};
+
+const GOAL_BADGE: Record<string, { label: string; variant: "live" | "success" | "warning" | "danger" | "outline" }> = {
+  queued: { label: "已排队", variant: "outline" },
+  in_progress: { label: "进行中", variant: "live" },
+  needs_attention: { label: "等我处理", variant: "warning" },
+  blocked: { label: "已阻塞", variant: "warning" },
+  completed: { label: "已完成", variant: "success" },
+  failed: { label: "失败", variant: "danger" },
 };
 
 function relativeTime(iso: string): string {
@@ -47,6 +57,10 @@ export default async function DashboardPage() {
   if (!user) redirect(await loginRedirectUrl());
 
   const summary = await fetchAgentSummary(user.id);
+  const goals = await listGoalsForDashboard({ userId: user.id, tasks: summary.tasks, agentAvailable: summary.ok }).catch((error) => {
+    console.error("[workos] goal queue load failed", error);
+    return [];
+  });
 
   return (
     <WorkosShell userName={user.name} email={user.email}>
@@ -71,12 +85,24 @@ export default async function DashboardPage() {
               在 Agent 中打开 <Icon name="arrow-up-right" size={13} />
             </Link>
           </CardHeader>
-          {summary.tasks.length === 0 ? (
+          {goals.length === 0 && summary.tasks.length === 0 ? (
             <EmptyState
               title={summary.ok ? "还没有进行中的工作" : "Agent 状态暂不可达"}
               description={summary.ok ? "在 Agent 中创建任务后，它会在这里持续更新。" : "稍后重试。已有任务不会被空数据覆盖。"}
               className="py-14"
             />
+          ) : goals.length > 0 ? (
+            <ul className="flex flex-col divide-y-2 divide-rule">
+              {goals.map((goal) => (
+                <li key={goal.goalId} className="flex items-center justify-between gap-3 px-4 py-3.5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Badge {...GOAL_BADGE[goal.status]} size="sm" />
+                    <span className="truncate text-sm text-ink/90">{goal.title}</span>
+                  </div>
+                  <span className="shrink-0 font-mono text-xs text-ink-2">{relativeTime(goal.lastSyncedAt)}</span>
+                </li>
+              ))}
+            </ul>
           ) : (
             <ul className="flex flex-col divide-y-2 divide-rule">
               {summary.tasks.map((task) => (
