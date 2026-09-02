@@ -2,20 +2,21 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { Navbar, PageHeader } from "@zmzai/theme";
+import { Badge, Card, CardBody, CardHeader, EmptyState, Icon, PageHeader } from "@zmzai/theme";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { fetchAgentSummary } from "@/lib/agent-client";
 import { getServerEnvironment } from "@/config/env";
+import { WorkosShell } from "@/components/workos-shell";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_BADGE: Record<string, string> = {
-  active: "badge badge-accent",
-  succeeded: "badge badge-ink",
-  failed: "badge badge-danger",
-  draft: "badge badge-muted",
-  cancelled: "badge badge-muted",
+const STATUS_BADGE: Record<string, { label: string; variant: "live" | "success" | "warning" | "danger" | "outline" }> = {
+  active: { label: "进行中", variant: "live" },
+  succeeded: { label: "已完成", variant: "success" },
+  failed: { label: "失败", variant: "danger" },
+  draft: { label: "待开始", variant: "outline" },
+  cancelled: { label: "已取消", variant: "outline" },
 };
 
 function relativeTime(iso: string): string {
@@ -47,44 +48,43 @@ export default async function DashboardPage() {
   const summary = await fetchAgentSummary(user.id);
 
   return (
-    <main className="page-shell flex min-h-dvh flex-col">
-      <Navbar
-        sublabel="Index"
-        brandHref="/"
-        badge={<span className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">i.zmzai.cloud</span>}
-      />
-
+    <WorkosShell userName={user.name} email={user.email}>
       <PageHeader
         icon="gauge"
-        eyebrow="dashboard"
-        title={`${user.name} 的工作台`}
-        className="rule-top py-8"
+        eyebrow="today"
+        title="今日工作"
+        description="从一个目标开始，持续推进 Agent 正在完成的工作。"
+        className="pb-8"
         actions={
-          <div className="flex items-center gap-4">
-            <span className="font-mono text-xs text-ink-2">{user.email}</span>
-            <form action="/logout" method="post">
-              <button type="submit" className="btn-ghost h-10">退出登录</button>
-            </form>
+          <div className="rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink-2">
+            目标创建即将接入
           </div>
         }
       />
 
-      <section className="grid flex-1 content-start gap-6 pb-16 lg:grid-cols-[1.2fr_1fr]">
-        <div className="module rule-top">
-          <div className="flex items-baseline justify-between">
-            <h2 className="eyebrow">Agent 最近任务</h2>
-            <Link href="https://a.zmzai.cloud" className="font-mono text-xs text-accent hover:underline">在 Agent 中打开 →</Link>
-          </div>
+      <section className="grid content-start gap-6 pb-16 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.8fr)]">
+        <Card padding="none" className="overflow-hidden">
+          <CardHeader>
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">推进队列</p>
+              <h2 className="mt-1 text-base font-semibold text-ink">正在进行的工作</h2>
+            </div>
+            <Link href="https://a.zmzai.cloud" className="inline-flex items-center gap-1 text-xs text-ink-2 transition-colors hover:text-ink">
+              在 Agent 中打开 <Icon name="arrow-up-right" size={13} />
+            </Link>
+          </CardHeader>
           {summary.tasks.length === 0 ? (
-            <p className="empty-note">
-              {summary.ok ? "还没有 Agent 任务，去 a.zmzai.cloud 创建第一个智能体。" : "Agent 服务暂不可达，稍后再试。"}
-            </p>
+            <EmptyState
+              title={summary.ok ? "还没有进行中的工作" : "Agent 状态暂不可达"}
+              description={summary.ok ? "在 Agent 中创建任务后，它会在这里持续更新。" : "稍后重试。已有任务不会被空数据覆盖。"}
+              className="py-14"
+            />
           ) : (
             <ul className="flex flex-col divide-y-2 divide-rule">
               {summary.tasks.map((task) => (
-                <li key={task.taskId} className="flex items-center justify-between gap-3 py-3">
+                <li key={task.taskId} className="flex items-center justify-between gap-3 px-4 py-3.5">
                   <div className="flex min-w-0 items-center gap-3">
-                    <span className={STATUS_BADGE[task.status] ?? "badge badge-muted"}>{task.status}</span>
+                    <Badge {...(STATUS_BADGE[task.status] ?? { label: task.status || "未知", variant: "outline" })} size="sm" />
                     <span className="truncate text-sm text-ink/90">{task.title}</span>
                   </div>
                   <span className="shrink-0 font-mono text-xs text-ink-2">{relativeTime(task.updatedAt)}</span>
@@ -92,46 +92,41 @@ export default async function DashboardPage() {
               ))}
             </ul>
           )}
-        </div>
+        </Card>
 
         <div className="flex flex-col gap-6">
-          <div className="module rule-top">
-            <h2 className="eyebrow">产品快捷入口</h2>
-            <ul className="grid grid-cols-2 gap-3 pt-2">
-              <li><Link className="entry" href="https://a.zmzai.cloud"><strong>Agent</strong><span>a.zmzai.cloud</span></Link></li>
-              <li><Link className="entry" href="https://m.zmzai.cloud"><strong>Relay</strong><span>m.zmzai.cloud</span></Link></li>
-              <li><Link className="entry" href="https://muzhi.zmzai.cloud"><strong>教程课</strong><span>muzhi.zmzai.cloud</span></Link></li>
-              <li><Link className="entry" href="https://zmzai.cloud"><strong>主站</strong><span>zmzai.cloud</span></Link></li>
-            </ul>
-          </div>
-
-          <div className="module rule-top">
-            <div className="flex items-baseline justify-between">
-              <h2 className="eyebrow">知识库概览</h2>
+          <Card padding="none" id="knowledge">
+            <CardHeader>
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">上下文</p>
+                <h2 className="mt-1 text-base font-semibold text-ink">项目知识</h2>
+              </div>
               <Link href="https://a.zmzai.cloud" className="font-mono text-xs text-accent hover:underline">管理 →</Link>
-            </div>
+            </CardHeader>
             {summary.workspaces.length === 0 ? (
-              <p className="empty-note">
-                {summary.ok ? "还没有智能体知识库条目。" : "Agent 服务暂不可达，稍后再试。"}
-              </p>
+              <EmptyState
+                title={summary.ok ? "还没有项目知识" : "知识摘要暂不可达"}
+                description={summary.ok ? "将任务结果归档后，它们会在这里形成项目上下文。" : "稍后重试。"}
+                className="py-12"
+              />
             ) : (
-              <ul className="flex flex-col divide-y-2 divide-rule">
+              <ul className="flex flex-col divide-y border-line">
                 {summary.workspaces.map((workspace) => (
-                  <li key={workspace.workspaceId} className="flex items-center justify-between gap-3 py-3">
+                  <li key={workspace.workspaceId} className="flex items-center justify-between gap-3 px-4 py-3">
                     <span className="truncate text-sm text-ink/90">{workspace.name}</span>
                     <span className="shrink-0 font-mono text-xs text-ink-2">{workspace.knowledgeCount} 条</span>
                   </li>
                 ))}
               </ul>
             )}
-          </div>
+          </Card>
+
+          <Card variant="surface" padding="md" id="projects">
+            <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">项目</p>
+            <p className="mt-2 text-sm text-ink-2">项目、目标与产物的关联层将在目标创建功能中接入。</p>
+          </Card>
         </div>
       </section>
-
-      <footer className="flex items-center justify-between border-t-2 border-rule py-5 font-mono text-xs text-ink-2">
-        <span>牧之 署名 · zmzai cloud</span>
-        <Link href="https://zmzai.cloud" className="transition-colors hover:text-accent">← 回产品矩阵</Link>
-      </footer>
-    </main>
+    </WorkosShell>
   );
 }
