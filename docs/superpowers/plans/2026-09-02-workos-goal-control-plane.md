@@ -19,11 +19,13 @@
 
 ## 3. 实现“今日工作”服务端页面
 
-1. 以现有 `app/dashboard/page.tsx` 为迁移入口，保留 session 校验与动态渲染。
-2. 新增目标输入表单：目标正文、项目选择／创建、背景资料引用；以 server action 或专用 route 处理提交和重定向。
-3. 用统一视图渲染推进队列：进行中、等我处理、已阻塞、完成；任务卡只展示必要状态、时间、下一操作和跳转。
-4. 把现有“最近任务”“知识库概览”折入相应队列与侧栏；产品快捷入口降级为上下文导航。
-5. 增加“上次同步时间”及错误／空态区分；Agent 不可达时回退已存快照，Relay 不可达时仅影响用量模块。
+1. 以现有 `app/dashboard/page.tsx` 为迁移入口，保留 session 校验与动态渲染；使用 `@zmzai/theme` 的 `AppShell` 作为唯一应用骨架，而非继续拼接 Navbar 与页面级侧栏。
+2. 用 `PageHeader` 的 page 变体实现「今日工作」；向 AppShell 注入项目／知识／用量／产品入口分组、账户块、预算摘要和命令面板条目。
+3. 新增目标输入表单：目标正文、项目选择／创建、背景资料引用；只使用 `Input`／`Textarea`、`Select`、`StatefulButton`，以 server action 或专用 route 处理提交和重定向。
+4. 用 `Card`、`Badge`、`EmptyState`、`Skeleton` 与 `Icon` 渲染推进队列；状态只映射到 `live`、`success`、`warning`、`danger` 语义 token，墨黑 accent 只负责结构与焦点。
+5. 把现有“最近任务”“知识库概览”折入相应队列与侧栏；产品快捷入口降级为上下文导航。
+6. 增加“上次同步时间”及错误／空态区分；Agent 不可达时回退已存快照，Relay 不可达时仅影响用量模块。
+7. 为新增交互逐项记录 default、hover、focus-visible、active、disabled、loading、error、success；验证键盘焦点、静默成功、就近内联错误及 reduced-motion 降级。
 
 ## 4. 结果收件箱与项目知识归档
 
