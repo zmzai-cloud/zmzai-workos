@@ -20,6 +20,12 @@
 | `scripts/seed-local.mjs` | 本地 E2E 种子（本地 Mongo + 测试 session） |
 | `scripts/cdp-shot.mjs` | Chrome headless CDP 截图（带登录态） |
 
+## 会话记忆配置
+
+WorkOS 通过 `AGENT_INTERNAL_URL` 请求 Agent 的 owner 范围内部 API；`WORKOS_SERVICE_SECRET_CURRENT` 必须与 Agent 侧相同，轮换时两侧可临时配置 `WORKOS_SERVICE_SECRET_PREVIOUS`。`MEMORY_WEB_ORIGIN` 是 Memory Center 的根地址（默认 `https://m.zmzai.cloud`）；生产只接受无路径、查询、凭据或片段的 HTTPS origin。本地开发可用 `http://localhost:<port>`。当前会话的 Workspace bank 链接由服务端生成，目标产品仍独立校验访问权限。
+
+会话页读取 Agent 持久化的本轮召回与沉淀回执。刷新会重新读取回执，SSE 重连按序号继续；沉淀 `pending` 超过 10 秒时，Agent 在授权读取后将其标为 `unknown`，不会自动重试。`unknown` 表示无法确认 Hindsight 是否已写入，不能解读为成功或失败。事实的编辑和删除请到 Memory Center；WorkOS 不保存另一份事实。本地 SQLite 预览没有生产 Memory 访问能力。
+
 ## 本地运行
 
 需要本地 MongoDB（127.0.0.1:27017，副本集 rs0）：
