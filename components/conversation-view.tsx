@@ -14,6 +14,7 @@ import { MemoryStatus } from "@/components/memory-status";
 import { memoryAvailabilityLabel, memoryBankHref } from "@/lib/memory-view";
 import { NoteEditor } from "@/components/note-editor";
 import { unifiedLineDiff } from "@/lib/line-diff";
+import { CloudMascot, type CloudMascotState } from "@/components/cloud-mascot";
 
 export type ConversationOutcomes = { notes: NoteView[]; todos: TodoView[] };
 export type ConversationDetailWithOutcomes = AgentConversationDetail & { outcomes: ConversationOutcomes };
@@ -215,6 +216,20 @@ export function ConversationView({ initial, memoryOrigin }: { initial: Conversat
   const bankHref = memoryBankHref(memoryOrigin, bankId);
   const approvalList = useMemo(() => [...approvals.values()], [approvals]);
 
+  // 小云状态与真实运行绑定：运行中思考；成功后短暂完成态；其余陪伴。
+  const [celebrate, setCelebrate] = useState(false);
+  const prevActive = useRef(runActive);
+  useEffect(() => {
+    if (prevActive.current && !runActive && detail.latestRun?.status === "succeeded") {
+      setCelebrate(true);
+      const timer = setTimeout(() => setCelebrate(false), 2_800);
+      prevActive.current = runActive;
+      return () => clearTimeout(timer);
+    }
+    prevActive.current = runActive;
+  }, [runActive, detail.latestRun?.status]);
+  const mascotState: CloudMascotState = runActive ? "thinking" : celebrate ? "complete" : "companion";
+
   return (
     <div className="flex h-full min-h-0 flex-col pb-16 lg:flex-row lg:gap-0 lg:pb-0">
       <section className={`flex min-h-0 min-w-0 flex-1 flex-col ${panelNote ? "hidden lg:flex" : "flex"}`} aria-label="对话">
@@ -224,9 +239,12 @@ export function ConversationView({ initial, memoryOrigin }: { initial: Conversat
             <h1 className="mt-2 truncate font-serif text-2xl font-bold text-ink">{detail.session.title || "对话"}</h1>
             {detail.workspaceName ? <p className="mt-1 font-mono text-[11px] text-ink-3">{detail.workspaceName}</p> : null}
           </div>
-          <Badge variant={runActive ? "live" : detail.latestRun?.status === "failed" ? "danger" : "outline"} size="sm" aria-live="polite">
-            {runLabels[detail.latestRun?.status ?? ""] ?? "等待回复"}
-          </Badge>
+          <div className="flex shrink-0 items-center gap-3">
+            <CloudMascot state={mascotState} size={56} />
+            <Badge variant={runActive ? "live" : detail.latestRun?.status === "failed" ? "danger" : "outline"} size="sm" aria-live="polite">
+              {runLabels[detail.latestRun?.status ?? ""] ?? "等待回复"}
+            </Badge>
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto py-6 pr-1">

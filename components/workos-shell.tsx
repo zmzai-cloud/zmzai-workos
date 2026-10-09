@@ -11,6 +11,7 @@ const sections: AppNavSection[] = [
     { label: "对话", href: "/conversations", icon: "message" },
     { label: "笔记", href: "/notes", icon: "book" },
     { label: "待办", href: "/todos", icon: "check-circle" },
+    { label: "搜索", href: "/search", icon: "search" },
   ] },
   { label: "服务", items: [
     { label: "记忆中心", href: "https://memory.zmzai.cloud", icon: "sparkle" },

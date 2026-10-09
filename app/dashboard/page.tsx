@@ -10,6 +10,7 @@ import { getServerEnvironment } from "@/config/env";
 import { WorkosShell } from "@/components/workos-shell";
 import { QuickStart } from "@/components/quick-start";
 import { getHomeData } from "@/lib/home";
+import { CloudMascot } from "@/components/cloud-mascot";
 
 export const dynamic = "force-dynamic";
 
@@ -48,13 +49,16 @@ export default async function DashboardPage() {
 
   return (
     <WorkosShell userName={user.name} email={user.email}>
-      <PageHeader
-        icon="gauge"
-        eyebrow={today}
-        title={`下午好，${user.name}`}
-        description="从这里看看今天要做什么、AI 刚留下了什么、上次做到哪里。"
-        className="pb-8"
-      />
+      <div className="flex items-start gap-4 pb-8">
+        <CloudMascot state="companion" size={72} className="mt-1 shrink-0" />
+        <PageHeader
+          icon="gauge"
+          eyebrow={today}
+          title={`下午好，${user.name}`}
+          description="从这里看看今天要做什么、AI 刚留下了什么、上次做到哪里。"
+          className="pb-0"
+        />
+      </div>
 
       <QuickStart workspaces={summary.workspaces} agentOk={summary.ok} />
 
