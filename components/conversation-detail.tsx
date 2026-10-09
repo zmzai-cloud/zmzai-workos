@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentConversationDetail } from "@/lib/agent-client";
 import { acceptEvent } from "@/lib/event-sequence";
-import { mergeMemoryReceipt } from "@/lib/memory-view";
+import { ConversationRefreshGuard, reconcileConversationDetail } from "@/lib/conversation-refresh";
 import { MemoryStatus } from "@/components/memory-status";
 
 const eventNames = ["memory.recall_succeeded", "memory.recall_unavailable", "memory.recall_disabled", "memory.retention_pending", "memory.retention_succeeded", "memory.retention_skipped", "memory.retention_failed", "memory.retention_unknown", "memory.retention_disabled", "session.status", "session.error", "message.created", "message.updated"];
@@ -16,13 +16,22 @@ export function ConversationDetail({ initial, memoryOrigin }: { initial: AgentCo
   const [error, setError] = useState("");
   const seen = useRef(new Set<string>());
   const lastSeq = useRef(0);
+  const refreshGuard = useRef<ConversationRefreshGuard | null>(null);
+  if (!refreshGuard.current) refreshGuard.current = new ConversationRefreshGuard(initial.latestRun?.runId ?? null);
   const sessionId = initial.session.id;
   const runId = detail.latestRun?.runId;
-  const refresh = useCallback(async () => {
-    const response = await fetch(`/api/conversations/${encodeURIComponent(sessionId)}`, { cache: "no-store" });
-    if (!response.ok) throw new Error("REFRESH_FAILED");
-    const next = await response.json() as AgentConversationDetail;
-    setDetail(previous => ({ ...next, memory: previous.latestRun?.runId === next.latestRun?.runId ? mergeMemoryReceipt(previous.memory, next.memory) : next.memory }));
+  const refresh = useCallback(async (expectedRunId: string) => {
+    const guard = refreshGuard.current!;
+    const ticket = guard.capture(expectedRunId);
+    if (!guard.isCurrent(ticket)) return;
+    try {
+      const response = await fetch(`/api/conversations/${encodeURIComponent(sessionId)}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("REFRESH_FAILED");
+      const next = await response.json() as AgentConversationDetail;
+      setDetail(previous => guard.accept(ticket, next.latestRun?.runId ?? null) ? reconcileConversationDetail(previous, next) : previous);
+    } catch (error) {
+      if (guard.isCurrent(ticket)) throw error;
+    }
   }, [sessionId]);
 
   useEffect(() => {
@@ -41,7 +50,7 @@ export function ConversationDetail({ initial, memoryOrigin }: { initial: AgentCo
         const eventRunId = payload.runId ?? runId;
         if (!acceptEvent(seen.current, eventRunId, sequence)) return;
         lastSeq.current = Math.max(lastSeq.current, sequence);
-        if (eventRunId === runId || message.type === "session.status") void refresh().catch(() => setError("状态更新暂时中断，请刷新页面重试。"));
+        if (eventRunId === runId || message.type === "session.status") void refresh(runId).catch(() => setError("状态更新暂时中断，请刷新页面重试。"));
       };
       for (const name of eventNames) source.addEventListener(name, handle);
       source.onerror = () => { source?.close(); if (!stopped) retry = setTimeout(connect, 1500); };
@@ -59,9 +68,10 @@ export function ConversationDetail({ initial, memoryOrigin }: { initial: AgentCo
       const response = await fetch(`/api/conversations/${encodeURIComponent(sessionId)}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt: text }) });
       if (!response.ok) throw new Error("SEND_FAILED");
       const started = await response.json() as { runId: string; status: string };
+      refreshGuard.current!.transition(started.runId);
       setPrompt("");
       setDetail(previous => ({ ...previous, latestRun: { runId: started.runId, sessionId, status: started.status, active: true }, memory: null }));
-      void refresh().catch(() => setError("消息已发送，状态暂时无法更新，请刷新页面。"));
+      void refresh(started.runId).catch(() => setError("消息已发送，状态暂时无法更新，请刷新页面。"));
     } catch { setError("发送失败，请稍后重试。内容仍留在输入框中。"); }
     finally { setSending(false); }
   }
