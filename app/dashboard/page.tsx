@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { Badge, Card, EmptyState, Icon, PageHeader } from "@zmzai/theme";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { fetchAgentSummary } from "@/lib/agent-client";
+import { fetchAgentSummary, fetchAllAgentWorkspaces } from "@/lib/agent-client";
 import { getServerEnvironment } from "@/config/env";
 import { WorkosShell } from "@/components/workos-shell";
 import { QuickStart } from "@/components/quick-start";
@@ -41,6 +41,8 @@ export default async function DashboardPage() {
   if (!user) redirect(await loginRedirectUrl());
 
   const summary = await fetchAgentSummary(user.id);
+  // QuickStart 的工作空间下拉需要 memoryEnabled 标签，单独取（summary 不含该字段）。
+  const conversationWorkspaces = summary.ok ? await fetchAllAgentWorkspaces(user.id).catch(() => []) : [];
   const home = await getHomeData(user.id).catch((error) => {
     console.error("[workos] home aggregation failed", error);
     return null;
@@ -60,14 +62,14 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <QuickStart workspaces={summary.workspaces} agentOk={summary.ok} />
+      <QuickStart workspaces={conversationWorkspaces} agentOk={summary.ok} />
 
       <section className="mt-8 space-y-3">
         <div className="flex items-end justify-between gap-3 px-1">
           <h2 className="font-serif text-lg font-bold text-ink">需要我处理</h2>
         </div>
         {home && home.attention.length > 0 ? (
-          <ul className="grid gap-3 sm:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {home.attention.map((item) => (
               <li key={item.id}>
                 <Card padding="md">
@@ -112,7 +114,7 @@ export default async function DashboardPage() {
         )}
       </section>
 
-      <section className="mt-8 grid gap-6 pb-16 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,1fr)]">
+      <section className="mt-8 grid grid-cols-1 gap-6 pb-16 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,1fr)]">
         <div className="space-y-3">
           <div className="flex items-end justify-between gap-3 px-1">
             <h2 className="font-serif text-lg font-bold text-ink">最近成果</h2>
