@@ -5,6 +5,7 @@ import type { AgentConversationDetail } from "@/lib/agent-client";
 import { acceptEvent } from "@/lib/event-sequence";
 import { ConversationRefreshGuard, reconcileConversationDetail } from "@/lib/conversation-refresh";
 import { MemoryStatus } from "@/components/memory-status";
+import { memoryAvailabilityLabel, memoryBankHref } from "@/lib/memory-view";
 
 const eventNames = ["memory.recall_succeeded", "memory.recall_unavailable", "memory.recall_disabled", "memory.retention_pending", "memory.retention_succeeded", "memory.retention_skipped", "memory.retention_failed", "memory.retention_unknown", "memory.retention_disabled", "session.status", "session.error", "message.created", "message.updated"];
 const runLabels: Record<string, string> = { created: "已创建", queued: "已排队", running: "正在回复", waiting_input: "等待输入", waiting_approval: "等待确认", paused: "已暂停", succeeded: "已完成", failed: "运行失败", cancelled: "已取消" };
@@ -77,7 +78,8 @@ export function ConversationDetail({ initial, memoryOrigin }: { initial: AgentCo
   }
 
   const bankId = detail.session.workspaceId;
-  const bankHref = memoryOrigin && bankId ? `${memoryOrigin}/banks/${encodeURIComponent(bankId)}/memories` : null;
+  const memoryAvailability = memoryAvailabilityLabel(detail.memoryEnabled, detail.workspaceName ?? bankId);
+  const bankHref = memoryBankHref(memoryOrigin, bankId);
   return <div className="max-w-4xl pb-20">
     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-6">
       <div><Link href="/conversations" className="text-xs text-ink-2 underline underline-offset-4">← 新对话</Link><h1 className="mt-3 font-serif text-2xl font-bold text-ink sm:text-3xl">{detail.session.title || "对话"}</h1></div>
@@ -91,6 +93,7 @@ export function ConversationDetail({ initial, memoryOrigin }: { initial: AgentCo
     <MemoryStatus receipt={detail.memory} href={bankHref} />
     <form onSubmit={send} className="mt-8 border-t border-line pt-5">
       <label htmlFor="message" className="block text-sm font-medium text-ink">继续对话</label>
+      <p className="mt-1 text-xs text-ink-3" role="status">{memoryAvailability}</p>
       <textarea id="message" value={prompt} onChange={event => setPrompt(event.target.value)} rows={4} maxLength={32768} placeholder="写下下一条消息…" disabled={sending || detail.latestRun?.active} className="mt-3 w-full resize-y border border-line bg-paper px-3 py-3 text-sm text-ink placeholder:text-ink-3 disabled:opacity-60" />
       {error ? <p role="alert" className="mt-2 text-sm text-red-700">{error}</p> : null}
       <div className="mt-3 flex flex-wrap items-center gap-3"><button type="submit" disabled={sending || detail.latestRun?.active || !prompt.trim()} className="min-h-11 bg-accent px-5 py-2 text-sm font-medium text-accent-ink disabled:cursor-not-allowed disabled:opacity-50">{sending ? "发送中…" : "发送消息"}</button>

@@ -104,12 +104,14 @@ export async function createAgentTask(input: CreateAgentTaskInput): Promise<{ ta
   return { taskId: body.taskId, runId: body.runId };
 }
 
-export type ConversationWorkspace = { workspaceId: string; name: string };
+export type ConversationWorkspace = { workspaceId: string; name: string; memoryEnabled?: boolean };
 export type AgentConversationDetail = {
   session: { id: string; title: string; workspaceId: string };
+  workspaceName?: string;
   messages: Array<{ id: string; role: string; text: string; createdAt: number }>;
   latestRun: { runId: string; sessionId: string; status: string; active: boolean } | null;
   memory: MemoryReceipt | null;
+  memoryEnabled?: boolean;
 };
 
 export class AgentRequestError extends Error {

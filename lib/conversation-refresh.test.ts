@@ -39,3 +39,19 @@ it("keeps persisted unknown when a late pending snapshot arrives for the same Ru
   if (guard.accept(ticket, delayed.latestRun?.runId ?? null)) shown = reconcileConversationDetail(shown, delayed);
   expect(shown.memory?.retention.status).toBe("unknown");
 });
+
+it("drops an older same-Run response after a newer refresh starts", async () => {
+  const guard = new ConversationRefreshGuard("run_2");
+  const oldTicket = guard.capture("run_2");
+  const newTicket = guard.capture("run_2");
+  let shown = detail("run_2", "pending", "2026-10-09T10:00:01Z");
+  const fresh = detail("run_2", "succeeded", "2026-10-09T10:00:03Z");
+  fresh.messages.push({ id: "new", role: "assistant", text: "new answer", createdAt: 2 });
+  fresh.latestRun = { ...fresh.latestRun!, status: "succeeded", active: false };
+  if (guard.accept(newTicket, "run_2")) shown = reconcileConversationDetail(shown, fresh);
+  const stale = detail("run_2", "pending", "2026-10-09T10:00:01Z");
+  stale.latestRun = { ...stale.latestRun!, status: "running", active: true };
+  if (guard.accept(oldTicket, "run_2")) shown = reconcileConversationDetail(shown, stale);
+  expect(shown.messages.at(-1)?.text).toBe("new answer");
+  expect(shown.latestRun?.status).toBe("succeeded");
+});

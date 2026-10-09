@@ -15,7 +15,7 @@ const environmentSchema = z.object({
     const url = new URL(value);
     return (url.protocol === "https:" || (process.env.NODE_ENV !== "production" && url.hostname === "localhost")) &&
       url.username === "" && url.password === "" && url.pathname === "/" && !url.search && !url.hash;
-  }).default("https://m.zmzai.cloud"),
+  }).default("https://memory.zmzai.cloud"),
   // 与 zmzai-agent 双侧同名；轮换窗口期可另配 PREVIOUS。
   WORKOS_SERVICE_SECRET_CURRENT: z.string().min(32),
   WORKOS_SERVICE_SECRET_PREVIOUS: optionalString,

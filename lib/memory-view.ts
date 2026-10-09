@@ -1,8 +1,14 @@
 export type MemoryHit = { memoryId?: string; text: string };
+export function memoryBankHref(origin: string | null, bankId: string | null): string | null {
+  return origin && bankId ? `${origin.replace(/\/$/, "")}/banks/${encodeURIComponent(bankId)}/memories` : null;
+}
+export function memoryAvailabilityLabel(enabled: boolean | undefined, workspaceName: string): string {
+  return enabled ? `记忆已开启 · ${workspaceName}` : "记忆暂不可用";
+}
 export type MemoryReceipt = {
   runId?: string;
   bankId?: string;
-  recall: { status: string; hits: MemoryHit[]; observedAt?: string | null };
+  recall: { status: string; hits: MemoryHit[]; usedHitCount?: number; observedAt?: string | null };
   retention: { status: string; updatedAt?: string | null };
 };
 
@@ -10,7 +16,7 @@ export function memoryView(receipt: MemoryReceipt | null) {
   const recall = receipt?.recall;
   const retention = receipt?.retention;
   const hits = (recall?.hits ?? []).slice(0, 8).map(hit => ({ ...hit, text: Array.from(hit.text).slice(0, 240).join("") }));
-  const count = hits.length;
+  const count = recall?.usedHitCount ?? hits.length;
   const recallLabel = recall?.status === "hit" ? `本轮参考了过往记忆 · ${count} 条` : ({
     empty: "这轮没有找到相关记忆",
     unavailable: "记忆暂不可用，本轮对话仍可继续",
