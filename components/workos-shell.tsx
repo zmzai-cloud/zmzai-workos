@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { AppShell, Badge, Button, type AppShellLink, type AppNavSection } from "@zmzai/theme";
 
 const sections: AppNavSection[] = [
-  { label: "工作", items: [{ label: "今日工作", href: "/dashboard", icon: "gauge" }] },
+  { label: "工作", items: [{ label: "今日工作", href: "/dashboard", icon: "gauge" }, { label: "对话", href: "/conversations", icon: "sparkle" }] },
   { label: "上下文", items: [
     { label: "项目", href: "/dashboard#projects", icon: "folder" },
     { label: "知识", href: "/dashboard#knowledge", icon: "book" },

@@ -11,6 +11,11 @@ const environmentSchema = z.object({
   AUTH_SECRET: z.string().min(32),
   SESSION_COOKIE_NAME: z.string().regex(/^[a-zA-Z0-9_-]+$/).default("muzhi_session"),
   AGENT_INTERNAL_URL: z.string().url().default("https://a.zmzai.cloud"),
+  MEMORY_WEB_ORIGIN: z.string().url().refine((value) => {
+    const url = new URL(value);
+    return (url.protocol === "https:" || (process.env.NODE_ENV !== "production" && url.hostname === "localhost")) &&
+      url.username === "" && url.password === "" && url.pathname === "/" && !url.search && !url.hash;
+  }).default("https://m.zmzai.cloud"),
   // 与 zmzai-agent 双侧同名；轮换窗口期可另配 PREVIOUS。
   WORKOS_SERVICE_SECRET_CURRENT: z.string().min(32),
   WORKOS_SERVICE_SECRET_PREVIOUS: optionalString,

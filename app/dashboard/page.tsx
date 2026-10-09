@@ -62,8 +62,8 @@ export default async function DashboardPage() {
     return [];
   });
   const queueItems = goals.length > 0
-    ? goals.map((goal) => ({ id: goal.goalId, title: goal.title, status: goal.status, updatedAt: goal.lastSyncedAt, nextStep: goal.attentionReason ?? (goal.status === "in_progress" ? "Agent 正在执行，结果会进入收件箱。" : "查看工作详情，继续推进。") }))
-    : summary.tasks.map((task) => ({ id: task.taskId, title: task.title, status: task.runStatus === "waiting_approval" || task.runStatus === "waiting_input" ? "needs_attention" : task.status === "active" ? "in_progress" : task.status === "succeeded" ? "completed" : task.status === "failed" ? "failed" : "queued", updatedAt: task.updatedAt, nextStep: task.attention ?? (task.status === "active" ? "Agent 正在执行，结果会进入收件箱。" : "查看工作详情，继续推进。") }));
+    ? goals.map((goal) => ({ id: goal.goalId, taskId: goal.agentTaskId, title: goal.title, status: goal.status, updatedAt: goal.lastSyncedAt, nextStep: goal.attentionReason ?? (goal.status === "in_progress" ? "Agent 正在执行，结果会进入收件箱。" : "查看工作详情，继续推进。") }))
+    : summary.tasks.map((task) => ({ id: task.taskId, taskId: task.taskId, title: task.title, status: task.runStatus === "waiting_approval" || task.runStatus === "waiting_input" ? "needs_attention" : task.status === "active" ? "in_progress" : task.status === "succeeded" ? "completed" : task.status === "failed" ? "failed" : "queued", updatedAt: task.updatedAt, nextStep: task.attention ?? (task.status === "active" ? "Agent 正在执行，结果会进入收件箱。" : "查看工作详情，继续推进。") }));
   const primary = queueItems.find((item) => item.status === "in_progress") ?? queueItems.find((item) => item.status === "needs_attention") ?? queueItems[0];
   const attention = queueItems.find((item) => item.id !== primary?.id && (item.status === "needs_attention" || item.status === "blocked"));
   const completed = queueItems.find((item) => item.id !== primary?.id && item.status === "completed");
@@ -91,7 +91,7 @@ export default async function DashboardPage() {
               <div className="flex items-center justify-between gap-4"><Badge {...(GOAL_BADGE[primary.status] ?? { label: "处理中", variant: "outline" })} size="sm" /><span className="font-mono text-[11px] text-ink-3">{relativeTime(primary.updatedAt)}</span></div>
               <h3 className="mt-5 font-serif text-2xl font-bold leading-snug tracking-tight text-ink">{primary.title}</h3>
               <p className="mt-3 max-w-xl text-sm leading-6 text-ink-2">{primary.nextStep}</p>
-              <Link href="https://a.zmzai.cloud" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-ink transition-colors hover:text-ink-2">查看进度 <Icon name="arrow-right" size={14} /></Link>
+              <Link href={`https://a.zmzai.cloud/quill/t/${encodeURIComponent(primary.taskId)}`} className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-ink transition-colors hover:text-ink-2">查看进度 <Icon name="arrow-right" size={14} /></Link>
             </Card>
             {(attention || completed) ? <div className="grid gap-3 sm:grid-cols-2">
               {attention ? <Card padding="md"><Badge {...(GOAL_BADGE[attention.status] ?? { label: "等我处理", variant: "warning" })} size="sm" /><h3 className="mt-3 text-sm font-semibold text-ink">{attention.title}</h3><p className="mt-1 text-xs leading-5 text-ink-2">{attention.nextStep}</p></Card> : null}
