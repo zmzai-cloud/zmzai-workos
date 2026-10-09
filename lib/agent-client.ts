@@ -10,6 +10,7 @@ export type AgentTask = {
   workspaceId: string;
   updatedAt: string;
   runStatus: string | null;
+  sessionId: string | null;
   attention: string | null;
 };
 
@@ -65,6 +66,7 @@ export async function fetchAgentSummary(userId: string): Promise<AgentSummary> {
           workspaceId: asString(record.workspaceId),
           updatedAt: asString(record.updatedAt),
           runStatus: typeof record.runStatus === "string" ? record.runStatus : null,
+          sessionId: typeof record.sessionId === "string" ? record.sessionId : null,
           attention: typeof record.attention === "string" ? record.attention : null,
         };
       }).filter((task) => task.taskId !== ""),
@@ -204,4 +206,59 @@ export async function fetchAgentEventStream(userId: string, runId: string, since
     if (error instanceof AgentRequestError) throw error;
     throw new AgentRequestError(503);
   } finally { clearTimeout(timeout); }
+}
+
+export type AgentSessionListItem = {
+  sessionId: string;
+  title: string;
+  workspaceId: string;
+  workspaceName: string | null;
+  updatedAt: string | null;
+  latestRun: { runId: string; status: string; active: boolean } | null;
+};
+
+/** 用户最近的 Agent 会话（首页「继续上次」与会话列表）。Agent 不可达时降级为空数组。 */
+export async function fetchAgentRecentSessions(userId: string, limit = 20): Promise<AgentSessionListItem[]> {
+  try {
+    const path = identityPath(`/api/internal/workos/sessions?limit=${limit}`, userId);
+    const body = await (await agentRequest(path)).json() as { items?: unknown };
+    if (!Array.isArray(body.items)) return [];
+    return body.items
+      .map((item) => {
+        const record = item as Record<string, unknown>;
+        const latestRun = record.latestRun as Record<string, unknown> | null | undefined;
+        return {
+          sessionId: asString(record.sessionId),
+          title: asString(record.title) || "未命名对话",
+          workspaceId: asString(record.workspaceId),
+          workspaceName: typeof record.workspaceName === "string" ? record.workspaceName : null,
+          updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : null,
+          latestRun:
+            latestRun && typeof latestRun === "object"
+              ? { runId: asString(latestRun.runId), status: asString(latestRun.status), active: latestRun.active === true }
+              : null,
+        };
+      })
+      .filter((item) => item.sessionId !== "");
+  } catch (error) {
+    console.error("[workos] agent sessions fetch failed", error);
+    return [];
+  }
+}
+
+/** 对话页审批回复（once / always / reject），透传 Agent 的 404 语义。 */
+export async function replyAgentPermission(input: {
+  userId: string;
+  sessionId: string;
+  requestId: string;
+  reply: "once" | "always" | "reject";
+  feedback?: string;
+}): Promise<{ resolved: boolean }> {
+  const path = `/api/internal/workos/sessions/${encodeURIComponent(input.sessionId)}/permissions/${encodeURIComponent(input.requestId)}`;
+  const body = await (await agentRequest(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ userId: input.userId, reply: input.reply, ...(input.feedback ? { feedback: input.feedback } : {}) }),
+  })).json().catch(() => null) as { resolved?: boolean } | null;
+  return { resolved: body?.resolved === true };
 }

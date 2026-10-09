@@ -6,14 +6,15 @@ import { usePathname } from "next/navigation";
 import { AppShell, Badge, Button, type AppShellLink, type AppNavSection } from "@zmzai/theme";
 
 const sections: AppNavSection[] = [
-  { label: "工作", items: [{ label: "今日工作", href: "/dashboard", icon: "gauge" }, { label: "对话", href: "/conversations", icon: "sparkle" }] },
-  { label: "上下文", items: [
-    { label: "项目", href: "/dashboard#projects", icon: "folder" },
-    { label: "知识", href: "/dashboard#knowledge", icon: "book" },
+  { label: "工作", items: [
+    { label: "今日", href: "/dashboard", icon: "gauge" },
+    { label: "对话", href: "/conversations", icon: "message" },
+    { label: "笔记", href: "/notes", icon: "book" },
+    { label: "待办", href: "/todos", icon: "check-circle" },
   ] },
   { label: "服务", items: [
-    { label: "用量", href: "https://m.zmzai.cloud", icon: "trend-up" },
-    { label: "Agent", href: "https://a.zmzai.cloud", icon: "sparkle" },
+    { label: "记忆中心", href: "https://memory.zmzai.cloud", icon: "sparkle" },
+    { label: "Agent", href: "https://a.zmzai.cloud", icon: "trend-up" },
   ] },
 ];
 

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth/session";
-import { AgentRequestError, createAgentConversation, fetchAllAgentWorkspaces } from "@/lib/agent-client";
+import { AgentRequestError, createAgentConversation, fetchAgentRecentSessions, fetchAllAgentWorkspaces } from "@/lib/agent-client";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,8 +12,10 @@ const failure = (error: unknown) => NextResponse.json({ error: "Agent 暂时不�
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
-  try { return NextResponse.json({ workspaces: await fetchAllAgentWorkspaces(user.id) }, { headers: { "cache-control": "no-store" } }); }
-  catch (error) { return failure(error); }
+  try {
+    const [workspaces, sessions] = await Promise.all([fetchAllAgentWorkspaces(user.id), fetchAgentRecentSessions(user.id, 50)]);
+    return NextResponse.json({ workspaces, sessions }, { headers: { "cache-control": "no-store" } });
+  } catch (error) { return failure(error); }
 }
 
 export async function POST(request: Request) {
