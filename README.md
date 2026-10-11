@@ -1,6 +1,6 @@
 # 工作台 · zmzai cloud
 
-`i.zmzai.cloud` 是 ZMZ AI 的个人工作台（个人 AI 工作空间产品）。
+`workos.zmzai.cloud` 是 ZMZ AI 的个人工作台（个人 AI 工作空间产品）。
 
 - 公开首页：价值主张 + 产品矩阵入口 + 登录 CTA；
 - `/dashboard` 今日首页：快速开始对话、需要确认的动作、下一步（今天/逾期/未排期待办）、最近成果、继续上次；
@@ -74,7 +74,7 @@ corepack pnpm build
 
 ## 部署
 
-push main → GitHub Actions（构建在 runner 完成）→ HK 服务器 release 目录 + pm2（端口 3014）。生产 env 真源：`/opt/zmzai/envs/workos/.env.production`（见 `.env.example`；生产需补 `WORKOS_INTERNAL_URL`，Agent 侧需升级框架到 0.17.3+ 并配 `WORKOS_INTERNAL_URL=https://i.zmzai.cloud`）。
+push main → GitHub Actions（检查与构建在 runner 完成）→ HK 服务器 release 目录 + pm2（端口 3014）。生产 env 真源：`/opt/zmzai/envs/workos/.env.production`。Agent 使用框架 0.17.3+；Agent 配置 `WORKOS_INTERNAL_URL=https://workos.zmzai.cloud`，WorkOS 配置 `AGENT_INTERNAL_URL=https://agent.zmzai.cloud`（见 `.env.example`）。
 
 ## 相关仓库
 
