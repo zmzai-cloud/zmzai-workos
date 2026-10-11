@@ -11,6 +11,12 @@ Local validation:
 - Completed conversation todo survives reload and can be reopened. Homepage complete/undo persists successfully.
 - Search clear restores recent items; late responses are invalidated; injected HTTP 503 shows a recoverable error and retry succeeds.
 
-A local real model run failed because the local relay was unreachable. Real approval application and live reply scrolling are release acceptance checks in the isolated production verification workspace. This does not represent a successful local model run.
+A local real model run failed because the local relay was unreachable. Production acceptance subsequently passed on release `3d52fa5b202549f154c741370409033ee775adf7` in the isolated verification workspace:
+- Saving the note reached revision 5; an actual new conversation received the latest text/revision and the model run succeeded.
+- The real note proposal displayed a human-readable diff and waiting cloud, and did not save before approval. Applying it reached revision 6, preserved prior text, and the run succeeded.
+- Reading at scrollTop 0 remained at the same position through live replies; the new-reply button appeared and jumped to the bottom.
+- Previously completed outcomes remain visible on the production page.
+
+The confirmation inspection revealed that a long outcomes list can push a pending approval above the visible messages. A persistent composer-adjacent button now scrolls to and focuses the pending approval region. The Agent remains authoritative for approvals.
 
 Deferred: global workspace filter, full notes split-view redesign, todo detail links, settings/backup relocation, and expanded memory management.

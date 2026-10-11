@@ -50,6 +50,7 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [newReply, setNewReply] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
+  const approvalsRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   const scrollRestored = useRef(false);
   const seen = useRef(new Set<string>());
@@ -310,7 +311,7 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
           </ol>
 
           {approvalList.length > 0 ? (
-            <div className="mt-5 space-y-3" aria-label="待确认动作">
+            <div ref={approvalsRef} id="pending-approvals" role="region" tabIndex={-1} className="mt-5 space-y-3" aria-label="待确认动作">
               {approvalList.map((approval) => (
                 <div key={approval.id} className="space-y-2">
                   {isDomainUpdate(approval.permission, approval.metadata) ? (
@@ -363,6 +364,10 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
         </div>
 
         {newReply ? <button type="button" className="my-2 self-center border border-line bg-paper px-3 py-1 text-xs" onClick={() => { const box = messagesRef.current; if (box) box.scrollTop = box.scrollHeight; nearBottom.current = true; setNewReply(false); }}>有新回复 · 跳到最新</button> : null}
+        {approvalList.length > 0 ? <Button type="button" variant="secondary" size="sm" className="my-2 self-start" aria-controls="pending-approvals" onClick={() => {
+          approvalsRef.current?.scrollIntoView({ block: "start" });
+          approvalsRef.current?.focus({ preventScroll: true });
+        }}>有 {approvalList.length} 项修改等你确认 · 查看</Button> : null}
         <form onSubmit={send} className="shrink-0 border-t border-line pt-3 pb-[env(safe-area-inset-bottom)]">
           <label htmlFor="message" className="block text-sm font-medium text-ink">继续对话</label>
           <p className="mt-1 text-xs text-ink-3" role="status">{memoryAvailability}</p>
