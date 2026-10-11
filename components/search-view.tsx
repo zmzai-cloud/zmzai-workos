@@ -127,8 +127,8 @@ export function SearchView({ initial }: { initial: SearchResult }) {
                 try {
                   const body = JSON.parse(await file.text()) as unknown;
                   const response = await fetch("/api/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-                  const summary = await response.json() as { notesImported?: number; todosImported?: number; message?: string };
-                  setImportMessage(response.ok ? `已恢复 ${summary.notesImported ?? 0} 篇笔记、${summary.todosImported ?? 0} 条待办。` : `恢复失败：${summary.message ?? "备份格式不正确"}`);
+                  const summary = await response.json() as { notesImported?: number; todosImported?: number; sourceLinksCleared?: number; workspaceLinksCleared?: number; runLinksCleared?: number; message?: string };
+                  setImportMessage(response.ok ? `已恢复 ${summary.notesImported ?? 0} 篇笔记、${summary.todosImported ?? 0} 条待办。${(summary.sourceLinksCleared ?? 0) + (summary.workspaceLinksCleared ?? 0) + (summary.runLinksCleared ?? 0) > 0 ? ` 已清除 ${summary.sourceLinksCleared ?? 0} 个不可访问的来源对话链接、${summary.workspaceLinksCleared ?? 0} 个工作空间关联、${summary.runLinksCleared ?? 0} 个运行关联，内容已保留。` : ""}` : `恢复失败：${summary.message ?? "备份格式不正确"}`);
                 } catch {
                   setImportMessage("恢复失败：文件无法解析。");
                 }

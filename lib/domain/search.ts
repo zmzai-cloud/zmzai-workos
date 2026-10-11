@@ -1,4 +1,4 @@
-import { fetchAgentRecentSessions, type AgentSessionListItem } from "@/lib/agent-client";
+import { fetchAgentRecentSessions, searchAgentSessions, type AgentSessionListItem } from "@/lib/agent-client";
 import { NoteModel } from "@/models/note";
 import { TodoModel } from "@/models/todo";
 import type { NoteView } from "@/lib/domain/notes";
@@ -77,7 +77,7 @@ export async function searchWorkspace(userId: string, rawQuery: string, options:
   const [noteDocs, todoDocs, sessions] = await Promise.all([
     NoteModel.find({ userId, $or: [{ title: pattern }, { markdown: pattern }] }).sort({ updatedAt: -1 }).limit(limit).lean(),
     TodoModel.find({ userId, $or: [{ title: pattern }, { description: pattern }] }).sort({ updatedAt: -1 }).limit(limit).lean(),
-    fetchAgentRecentSessions(userId, 50),
+    searchAgentSessions(userId, query, limit),
   ]);
   return {
     notes: noteDocs.map((doc) => {
@@ -89,7 +89,6 @@ export async function searchWorkspace(userId: string, rawQuery: string, options:
       return { kind: "todo" as const, todo, snippet: snippet(`${todo.title}\n${todo.description}`, query) };
     }),
     conversations: sessions
-      .filter((conversation) => conversation.title.toLowerCase().includes(query.toLowerCase()))
       .slice(0, limit)
       .map((conversation) => ({ kind: "conversation" as const, conversation })),
   };

@@ -9,13 +9,16 @@ import { listNotes } from "@/lib/domain/notes";
 
 export const dynamic = "force-dynamic";
 
-export default async function NotesPage() {
+export default async function NotesPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+  const rawPage = (await searchParams).page ?? "1";
+  const page = /^\d+$/.test(rawPage) ? Math.max(1, Math.min(Number(rawPage), 10000)) : 1;
   const user = await getCurrentUser();
   if (!user) redirect("/");
-  const notes = await listNotes(user.id, { limit: 100 }).catch((error) => {
+  const batch = await listNotes(user.id, { limit: 51, offset: (page - 1) * 50 }).catch((error) => {
     console.error("[workos] note list failed", error);
     return [];
   });
+  const notes = batch.slice(0, 50);
   return (
     <WorkosShell userName={user.name} email={user.email}>
       <div className="flex flex-wrap items-end justify-between gap-4 pb-8">
@@ -42,6 +45,11 @@ export default async function NotesPage() {
           ))}
         </ul>
       )}
+      <nav aria-label="笔记分页" className="mt-6 flex items-center justify-between gap-3 text-sm">
+        {page > 1 ? <Link href={`/notes?page=${page - 1}`} className="underline">上一页</Link> : <span />}
+        <span>第 {page} 页</span>
+        {batch.length > 50 ? <Link href={`/notes?page=${page + 1}`} className="underline">下一页</Link> : <span />}
+      </nav>
     </WorkosShell>
   );
 }

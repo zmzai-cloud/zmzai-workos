@@ -1,16 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { Badge, Button, Card, EmptyState, Icon, Tabs } from "@zmzai/theme";
+import { Button, Card, EmptyState, Icon, Tabs } from "@zmzai/theme";
 
 import type { TodoView } from "@/lib/domain/todos";
 
 /** 待办页：今天 / 即将到期 / 全部 / 已完成 筛选；手动创建、编辑、完成与恢复。 */
-export function TodoManager({ initialTodos }: { initialTodos: TodoView[] }) {
+export function TodoManager({ initialTodos, initialFilter = "all" }: { initialTodos: TodoView[]; initialFilter?: string }) {
+  const router = useRouter();
   const [todos, setTodos] = useState(initialTodos);
-  const [filter, setFilter] = useState("all");
+  const filter = initialFilter;
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
@@ -25,13 +27,6 @@ export function TodoManager({ initialTodos }: { initialTodos: TodoView[] }) {
     if (filter === "upcoming") return open.filter((todo) => todo.dueAt && new Date(todo.dueAt) >= startOfTomorrow).sort((a, b) => (a.dueAt ?? "").localeCompare(b.dueAt ?? ""));
     return open.sort((a, b) => (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999") || Date.parse(b.createdAt) - Date.parse(a.createdAt));
   }, [todos, filter, startOfTomorrow]);
-
-  const counts = {
-    today: todos.filter((todo) => todo.status === "open" && todo.dueAt && new Date(todo.dueAt) < startOfTomorrow).length,
-    upcoming: todos.filter((todo) => todo.status === "open" && todo.dueAt && new Date(todo.dueAt) >= startOfTomorrow).length,
-    all: todos.filter((todo) => todo.status === "open").length,
-    done: todos.filter((todo) => todo.status === "done").length,
-  };
 
   async function patchTodo(todoId: string, patch: Record<string, unknown>) {
     const previous = todos;
@@ -65,13 +60,13 @@ export function TodoManager({ initialTodos }: { initialTodos: TodoView[] }) {
       <Tabs
         className="mt-6"
         items={[
-          { value: "today", label: "今天", count: counts.today },
-          { value: "upcoming", label: "即将到期", count: counts.upcoming },
-          { value: "all", label: "全部", count: counts.all },
-          { value: "done", label: "已完成", count: counts.done },
+          { value: "today", label: "今天" },
+          { value: "upcoming", label: "即将到期" },
+          { value: "all", label: "全部" },
+          { value: "done", label: "已完成" },
         ]}
         value={filter}
-        onValueChange={setFilter}
+        onValueChange={(value) => router.push(`/todos?filter=${value}`)}
       />
 
       <ul className="mt-4 space-y-2">

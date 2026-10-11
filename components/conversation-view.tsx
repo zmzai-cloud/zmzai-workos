@@ -367,6 +367,7 @@ function NoteUpdatePreview({ metadata, onOpenNote }: { metadata: unknown; onOpen
   const [current, setCurrent] = useState<NoteView | null>(null);
   const noteId = (metadata as { noteId?: unknown } | undefined)?.noteId;
   const proposed = (metadata as { markdown?: unknown } | undefined)?.markdown;
+  const expectedRevision = (metadata as { expectedRevision?: unknown } | undefined)?.expectedRevision;
   useEffect(() => {
     if (typeof noteId !== "string" || typeof proposed !== "string") return;
     let stopped = false;
@@ -386,6 +387,9 @@ function NoteUpdatePreview({ metadata, onOpenNote }: { metadata: unknown; onOpen
         <p className="text-xs font-medium text-ink">改写预览（当前 → AI 提议）</p>
         <button type="button" onClick={onOpenNote} className="text-xs text-ink-2 underline underline-offset-4">查看笔记</button>
       </div>
+      {typeof expectedRevision === "number" && current.revision !== expectedRevision ? (
+        <p className="mt-2 text-sm text-red-800" role="status">笔记已从版本 {expectedRevision} 更新为 {current.revision}。这份旧提议无法保存，请拒绝后让 AI 重新读取并提议。</p>
+      ) : null}
       <div className="mt-2 max-h-64 overflow-auto border border-line bg-paper">
         <DiffView diff={diff || "--- 无文本差异\n+++ 无文本差异\n@@ -1,1 +1,1 @@\n 内容一致"} />
       </div>

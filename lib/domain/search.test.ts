@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/models/note", () => ({ NoteModel: { find: mocks.noteFind } }));
 vi.mock("@/models/todo", () => ({ TodoModel: { find: mocks.todoFind } }));
-vi.mock("@/lib/agent-client", () => ({ fetchAgentRecentSessions: mocks.sessions }));
+vi.mock("@/lib/agent-client", () => ({ fetchAgentRecentSessions: mocks.sessions, searchAgentSessions: mocks.sessions }));
 import { searchWorkspace } from "./search";
 
 const noteDoc = {
@@ -47,6 +47,7 @@ it("escapes regex special characters in the query", async () => {
 it("groups hits by kind and builds snippets around the match", async () => {
   mocks.noteFind.mockReturnValueOnce(chain([noteDoc]));
   mocks.todoFind.mockReturnValueOnce(chain([todoDoc]));
+  mocks.sessions.mockResolvedValueOnce([]);
   const result = await searchWorkspace("u1", "staging");
   expect(result.notes[0].snippet).toContain("staging");
   expect(result.conversations).toHaveLength(0); // 标题不匹配

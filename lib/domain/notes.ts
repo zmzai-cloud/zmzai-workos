@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ClientSession } from "mongoose";
 
 import { NoteModel } from "@/models/note";
 import { newDomainId } from "@/lib/domain/ids";
@@ -69,8 +70,8 @@ function toView(doc: NoteDoc | null | undefined): NoteView | null {
   };
 }
 
-export async function createNote(userId: string, input: z.output<typeof noteCreateInput>): Promise<NoteView> {
-  const doc = await NoteModel.create({
+export async function createNote(userId: string, input: z.output<typeof noteCreateInput>, session?: ClientSession): Promise<NoteView> {
+  const data = {
     noteId: newDomainId("note"),
     userId,
     workspaceId: input.workspaceId ?? null,
@@ -79,12 +80,14 @@ export async function createNote(userId: string, input: z.output<typeof noteCrea
     revision: 1,
     sourceSessionId: input.sourceSessionId ?? null,
     sourceRunId: input.sourceRunId ?? null,
-  });
+  };
+  const doc = session ? (await NoteModel.create([data], { session }))[0] : await NoteModel.create(data);
   return toView(doc)!;
 }
 
-export async function getNote(userId: string, noteId: string): Promise<NoteView | null> {
-  const doc = await NoteModel.findOne({ userId, noteId }).lean();
+export async function getNote(userId: string, noteId: string, session?: ClientSession): Promise<NoteView | null> {
+  const query = NoteModel.findOne({ userId, noteId });
+  const doc = await (session ? query.session(session) : query).lean();
   return toView(doc);
 }
 
@@ -93,25 +96,25 @@ export async function updateNote(
   noteId: string,
   revision: number,
   patch: z.output<typeof noteUpdateInput>,
+  session?: ClientSession,
 ): Promise<NoteView> {
   const updated = await NoteModel.findOneAndUpdate(
     { userId, noteId, revision },
     { $set: { ...(patch.title !== undefined ? { title: patch.title } : {}), ...(patch.markdown !== undefined ? { markdown: patch.markdown } : {}) }, $inc: { revision: 1 } },
-    { new: true },
+    { new: true, ...(session ? { session } : {}) },
   ).lean();
   if (!updated) {
-    const current = await getNote(userId, noteId);
+    const current = await getNote(userId, noteId, session);
     if (!current) throw new Error("NOTE_NOT_FOUND");
     throw new RevisionConflictError(current);
   }
   return toView(updated)!;
 }
 
-export async function listNotes(userId: string, options: { limit?: number; sourceSessionId?: string } = {}): Promise<NoteView[]> {
+export async function listNotes(userId: string, options: { limit?: number; offset?: number; sourceSessionId?: string } = {}): Promise<NoteView[]> {
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
-  const docs = await NoteModel.find({ userId, ...(options.sourceSessionId ? { sourceSessionId: options.sourceSessionId } : {}) })
-    .sort({ updatedAt: -1 })
-    .limit(limit)
-    .lean();
+  const query = NoteModel.find({ userId, ...(options.sourceSessionId ? { sourceSessionId: options.sourceSessionId } : {}) })
+    .sort({ updatedAt: -1, noteId: -1 }).limit(limit);
+  const docs = await (options.offset ? query.skip(options.offset) : query).lean();
   return docs.map((doc) => toView(doc)!);
 }

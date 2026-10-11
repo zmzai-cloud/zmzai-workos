@@ -83,4 +83,18 @@ push main → GitHub Actions（构建在 runner 完成）→ HK 服务器 releas
 - [`zmzai-agent`](https://github.com/zmzai-cloud/zmzai-agent)：Agent 会话与工具执行工作台（内部 API 提供方）；
 - [`zmzai-framework`](https://github.com/zmzai-cloud/zmzai-framework)：agent-framework 包（0.17.3 修复 createServer 字段丢弃）。
 
+## 数据可靠性与 PR 检查
+
+Mongo 必须为副本集（生产已使用 rs0）。AI 领域动作与台账在同一事务提交；同一动作键只允许相同身份和参数重放。模型改写笔记须传入生成提议时读取的 expectedRevision；等待审批期间修改后旧提议返回 409，需要重新读取并提议。
+
+导出包含全部笔记、待办和分页读取的对话引用；格式上限为 5000 篇笔记、10000 条待办、2000 个对话引用，超过上限明确失败，服务不可用时不会输出不完整备份。恢复在一个事务内全部新建，保留日期、revision 和完成状态；来源归属由 Agent 校验，失效或他人关联会清除并在结果中报告。兼容旧 v1 文件中的 userId 字段，但忽略它，始终使用当前登录身份。
+
+真实 Mongo 可靠性测试自动创建并清理独立数据库，仅允许 localhost：
+
+```bash
+WORKOS_TEST_MONGODB_URI="mongodb://127.0.0.1:27017/?replicaSet=rs0" corepack pnpm test
+```
+
+PR checks 执行 typecheck、测试（含隔离 Mongo 副本集）及构建；main 部署先通过同样的 checks。Agent 的 WORKOS_INTERNAL_URL 默认 https://workos.zmzai.cloud，WorkOS 的 AGENT_INTERNAL_URL 默认 https://agent.zmzai.cloud。
+
 Apache-2.0 · 知末智云

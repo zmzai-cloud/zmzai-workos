@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ClientSession } from "mongoose";
 
 import { TodoModel } from "@/models/todo";
 import { newDomainId } from "@/lib/domain/ids";
@@ -75,27 +76,29 @@ function toView(doc: TodoDoc | null | undefined): TodoView | null {
   };
 }
 
-export async function createTodo(userId: string, input: z.output<typeof todoCreateInput>): Promise<TodoView> {
-  const doc = await TodoModel.create({
+export async function createTodo(userId: string, input: z.output<typeof todoCreateInput>, session?: ClientSession): Promise<TodoView> {
+  const data = {
     todoId: newDomainId("todo"),
     userId,
     workspaceId: input.workspaceId ?? null,
     title: input.title,
     description: input.description,
-    status: "open",
+    status: "open" as const,
     dueAt: input.dueAt ? new Date(input.dueAt) : null,
     sourceSessionId: input.sourceSessionId ?? null,
     sourceRunId: input.sourceRunId ?? null,
-  });
+  };
+  const doc = session ? (await TodoModel.create([data], { session }))[0] : await TodoModel.create(data);
   return toView(doc)!;
 }
 
-export async function getTodo(userId: string, todoId: string): Promise<TodoView | null> {
-  const doc = await TodoModel.findOne({ userId, todoId }).lean();
+export async function getTodo(userId: string, todoId: string, session?: ClientSession): Promise<TodoView | null> {
+  const query = TodoModel.findOne({ userId, todoId });
+  const doc = await (session ? query.session(session) : query).lean();
   return toView(doc);
 }
 
-export async function updateTodo(userId: string, todoId: string, patch: z.output<typeof todoUpdateInput>): Promise<TodoView> {
+export async function updateTodo(userId: string, todoId: string, patch: z.output<typeof todoUpdateInput>, session?: ClientSession): Promise<TodoView> {
   const $set: Record<string, unknown> = {};
   if (patch.title !== undefined) $set.title = patch.title;
   if (patch.description !== undefined) $set.description = patch.description;
@@ -104,14 +107,14 @@ export async function updateTodo(userId: string, todoId: string, patch: z.output
     $set.status = patch.status;
     $set.completedAt = patch.status === "done" ? new Date() : null;
   }
-  const updated = await TodoModel.findOneAndUpdate({ userId, todoId }, { $set }, { new: true }).lean();
+  const updated = await TodoModel.findOneAndUpdate({ userId, todoId }, { $set }, { new: true, ...(session ? { session } : {}) }).lean();
   if (!updated) throw new Error("TODO_NOT_FOUND");
   return toView(updated)!;
 }
 
 export async function listTodos(
   userId: string,
-  options: { filter?: TodoFilter; limit?: number; sourceSessionId?: string } = {},
+  options: { filter?: TodoFilter; limit?: number; offset?: number; sourceSessionId?: string } = {},
 ): Promise<TodoView[]> {
   const limit = Math.min(Math.max(options.limit ?? 100, 1), 200);
   const filter = options.filter ?? "all";
@@ -136,7 +139,8 @@ export async function listTodos(
     query.status = "open";
     sort = { dueAt: 1, updatedAt: -1 };
   }
-  const docs = await TodoModel.find(query).sort(sort).limit(limit).lean();
+  const cursor = TodoModel.find(query).sort({ ...sort, todoId: 1 }).limit(limit);
+  const docs = await (options.offset ? cursor.skip(options.offset) : cursor).lean();
   return docs.map((doc) => toView(doc)!);
 }
 

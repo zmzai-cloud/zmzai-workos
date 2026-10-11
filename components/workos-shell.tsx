@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { AppShell, Badge, Button, type AppShellLink, type AppNavSection } from "@zmzai/theme";
+import { AppShell, Button, type AppShellLink, type AppNavSection } from "@zmzai/theme";
 
 const sections: AppNavSection[] = [
   { label: "工作", items: [
@@ -15,7 +15,7 @@ const sections: AppNavSection[] = [
   ] },
   { label: "服务", items: [
     { label: "记忆中心", href: "https://memory.zmzai.cloud", icon: "sparkle" },
-    { label: "Agent", href: "https://a.zmzai.cloud", icon: "trend-up" },
+    { label: "Agent", href: "https://agent.zmzai.cloud", icon: "trend-up" },
   ] },
 ];
 
@@ -35,7 +35,7 @@ export function WorkosShell({
   const pathname = usePathname() ?? "/dashboard";
   return (
     <AppShell
-      brand={{ label: "Index", suffix: "i.zmzai.cloud", href: "/" }}
+      brand={{ label: "个人工作空间", suffix: "ZMZ AI", href: "/" }}
       sections={sections}
       pathname={pathname}
       link={WorkosLink}
@@ -48,7 +48,6 @@ export function WorkosShell({
           </form>
         </div>
       )}
-      headerExtras={<Badge variant="outline" size="sm">用量待接入</Badge>}
     >
       {children}
     </AppShell>

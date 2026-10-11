@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
   const outcome = await executeDomainAction(parsed.data);
   if (!outcome.ok) {
-    const status = outcome.error === "REVISION_CONFLICT" ? 409 : outcome.error === "NOTE_NOT_FOUND" || outcome.error === "TODO_NOT_FOUND" ? 404 : 500;
+    const status = outcome.error === "REVISION_CONFLICT" || outcome.error === "ACTION_KEY_CONFLICT" ? 409 : outcome.error === "NOTE_NOT_FOUND" || outcome.error === "TODO_NOT_FOUND" ? 404 : 500;
     return NextResponse.json({ error: outcome.error, ...(outcome.error === "REVISION_CONFLICT" && "current" in outcome ? { current: outcome.current } : {}), ...(outcome.error === "EXECUTION_FAILED" ? { message: outcome.message } : {}), actionId: outcome.actionId }, { status, headers: { "cache-control": "no-store" } });
   }
   return NextResponse.json(outcome, { headers: { "cache-control": "no-store" } });

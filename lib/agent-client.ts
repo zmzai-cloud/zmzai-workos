@@ -217,33 +217,55 @@ export type AgentSessionListItem = {
   latestRun: { runId: string; status: string; active: boolean } | null;
 };
 
-/** 用户最近的 Agent 会话（首页「继续上次」与会话列表）。Agent 不可达时降级为空数组。 */
+export async function fetchAgentSessionPage(userId: string, options: { limit?: number; after?: string; cursor?: string; q?: string; stable?: boolean } = {}): Promise<{ items: AgentSessionListItem[]; nextCursor: string | null }> {
+  const params = new URLSearchParams({ limit: String(options.limit ?? 20) });
+  if (options.stable) params.set("order", "stable");
+  if (options.after) params.set("after", options.after);
+  if (options.cursor) params.set("cursor", options.cursor);
+  if (options.q) params.set("q", options.q);
+  const path = identityPath(`/api/internal/workos/sessions?${params}`, userId);
+  const body = await (await agentRequest(path)).json() as { items?: unknown; nextCursor?: unknown };
+  if (!Array.isArray(body.items) || (body.nextCursor !== null && typeof body.nextCursor !== "string")) throw new AgentRequestError(502);
+  const items = body.items.map((item) => {
+    if (!item || typeof item !== "object") throw new AgentRequestError(502);
+    const record = item as Record<string, unknown>;
+    if (typeof record.sessionId !== "string" || !record.sessionId || typeof record.workspaceId !== "string") throw new AgentRequestError(502);
+    const latestRun = record.latestRun as Record<string, unknown> | null | undefined;
+    return {
+      sessionId: record.sessionId, title: asString(record.title) || "未命名对话", workspaceId: record.workspaceId,
+      workspaceName: typeof record.workspaceName === "string" ? record.workspaceName : null,
+      updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : null,
+      latestRun: latestRun && typeof latestRun === "object" ? { runId: asString(latestRun.runId), status: asString(latestRun.status), active: latestRun.active === true } : null,
+    };
+  });
+  return { items, nextCursor: body.nextCursor as string | null };
+}
+
+/** Recent UI summaries may degrade; backups use the strict paginated API instead. */
 export async function fetchAgentRecentSessions(userId: string, limit = 20): Promise<AgentSessionListItem[]> {
-  try {
-    const path = identityPath(`/api/internal/workos/sessions?limit=${limit}`, userId);
-    const body = await (await agentRequest(path)).json() as { items?: unknown };
-    if (!Array.isArray(body.items)) return [];
-    return body.items
-      .map((item) => {
-        const record = item as Record<string, unknown>;
-        const latestRun = record.latestRun as Record<string, unknown> | null | undefined;
-        return {
-          sessionId: asString(record.sessionId),
-          title: asString(record.title) || "未命名对话",
-          workspaceId: asString(record.workspaceId),
-          workspaceName: typeof record.workspaceName === "string" ? record.workspaceName : null,
-          updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : null,
-          latestRun:
-            latestRun && typeof latestRun === "object"
-              ? { runId: asString(latestRun.runId), status: asString(latestRun.status), active: latestRun.active === true }
-              : null,
-        };
-      })
-      .filter((item) => item.sessionId !== "");
-  } catch (error) {
-    console.error("[workos] agent sessions fetch failed", error);
-    return [];
-  }
+  try { return (await fetchAgentSessionPage(userId, { limit })).items; }
+  catch { return []; }
+}
+
+export async function searchAgentSessions(userId: string, q: string, limit = 8): Promise<AgentSessionListItem[]> {
+  return (await fetchAgentSessionPage(userId, { q, limit })).items;
+}
+
+export async function fetchAllAgentSessions(userId: string): Promise<AgentSessionListItem[]> {
+  const items: AgentSessionListItem[] = [];
+  const seen = new Set<string>();
+  let after: string | undefined;
+  do {
+    const page = await fetchAgentSessionPage(userId, { limit: 100, stable: true, after });
+    for (const item of page.items) {
+      if (seen.has(item.sessionId)) throw new AgentRequestError(502);
+      seen.add(item.sessionId); items.push(item);
+    }
+    if (items.length > 2_000) throw new Error("BACKUP_LIMIT_EXCEEDED");
+    if (page.nextCursor && (page.items.length === 0 || page.nextCursor !== page.items.at(-1)?.sessionId || page.nextCursor === after)) throw new AgentRequestError(502);
+    after = page.nextCursor ?? undefined;
+  } while (after);
+  return items;
 }
 
 /** 对话页审批回复（once / always / reject），透传 Agent 的 404 语义。 */
