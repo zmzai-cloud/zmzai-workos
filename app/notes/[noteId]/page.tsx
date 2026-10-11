@@ -18,7 +18,7 @@ export default async function NotePage({ params }: { params: Promise<{ noteId: s
   const workspaces = await fetchAllAgentWorkspaces(user.id).catch(() => []);
   return (
     <WorkosShell userName={user.name} email={user.email}>
-      <NotePageClient note={note} workspaces={workspaces} />
+      <NotePageClient key={noteId} note={note} workspaces={workspaces} />
     </WorkosShell>
   );
 }

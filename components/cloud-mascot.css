@@ -1,4 +1,4 @@
-/* 墨黑小云三态：状态由父级文字同时说明，动画只是辅助表达。
+/* 墨黑小云五态：状态由父级文字同时说明，动画只是辅助表达。
    prefers-reduced-motion 下不播放位移/循环动画，仅保留静态差异。 */
 
 .zmz-cloud-body {
@@ -26,7 +26,7 @@
   94.5%, 97% { transform: scaleY(0.12); }
 }
 
-/* 三态切换：眼睛组只保留当前态 */
+/* 表情切换：眼睛组只保留当前态 */
 .zmz-cloud-eyes {
   opacity: 0;
   transition: opacity 0.25s ease;
@@ -72,3 +72,8 @@
     transition-duration: 0.01ms;
   }
 }
+
+[data-cloud-state="waiting"] .zmz-cloud-dots { opacity: 0; transform: scale(0.2); }
+[data-cloud-state="waiting"] .zmz-cloud-question { opacity: 1; transform: scale(1); }
+[data-cloud-state="error"] .zmz-cloud-eyes-companion { opacity: 0; }
+[data-cloud-state="error"] .zmz-cloud-eyes-error { opacity: 1; }

@@ -114,7 +114,7 @@ export async function updateTodo(userId: string, todoId: string, patch: z.output
 
 export async function listTodos(
   userId: string,
-  options: { filter?: TodoFilter; limit?: number; offset?: number; sourceSessionId?: string } = {},
+  options: { filter?: TodoFilter; limit?: number; offset?: number; sourceSessionId?: string; includeCompleted?: boolean } = {},
 ): Promise<TodoView[]> {
   const limit = Math.min(Math.max(options.limit ?? 100, 1), 200);
   const filter = options.filter ?? "all";
@@ -124,7 +124,9 @@ export async function listTodos(
 
   const query: Record<string, unknown> = { userId, ...(options.sourceSessionId ? { sourceSessionId: options.sourceSessionId } : {}) };
   let sort: Record<string, 1 | -1> = { updatedAt: -1 };
-  if (filter === "today") {
+  if (options.includeCompleted) {
+    // Conversation outcomes retain both completed and open items.
+  } else if (filter === "today") {
     // 逾期与今天到期都算「今天」要处理的；不包含未排期。
     query.status = "open";
     query.dueAt = { $lt: startOfTomorrow };

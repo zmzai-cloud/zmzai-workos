@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button, Card, EmptyState, Icon, Input } from "@zmzai/theme";
 
+import { LatestRequest } from "@/lib/latest-request";
 import type { SearchResult } from "@/lib/domain/search";
 
 /** 全局搜索：真实笔记 / 待办 / 会话标题；空查询展示最近项。附带数据导出与恢复。 */
@@ -12,24 +13,39 @@ export function SearchView({ initial }: { initial: SearchResult }) {
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<SearchResult>(initial);
   const [loading, setLoading] = useState(false);
+  const requests = useRef(new LatestRequest());
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [error, setError] = useState("");
   const [importMessage, setImportMessage] = useState("");
 
   const runSearch = useCallback(async (value: string) => {
-    setLoading(true);
+    if (timer.current) clearTimeout(timer.current);
+    if (!value.trim()) { requests.current.invalidate(); setResult(initial); setLoading(false); setError(""); return; }
+    const ticket = requests.current.begin();
+    setLoading(true); setError("");
     try {
-      const response = await fetch(`/api/search?q=${encodeURIComponent(value)}`, { cache: "no-store" });
-      if (response.ok) setResult(await response.json() as SearchResult);
+      const response = await fetch(`/api/search?q=${encodeURIComponent(value)}`, { cache: "no-store", signal: ticket.signal });
+      if (!response.ok) throw new Error("SEARCH_FAILED");
+      const next = await response.json() as SearchResult;
+      if (requests.current.isCurrent(ticket)) setResult(next);
+    } catch {
+      if (requests.current.isCurrent(ticket)) setError("搜索暂时不可用，请重试。");
     } finally {
-      setLoading(false);
+      if (requests.current.isCurrent(ticket)) setLoading(false);
     }
-  }, []);
+  }, [initial]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (query !== "") void runSearch(query);
-    }, 350);
-    return () => clearTimeout(timer);
+    if (query.trim()) timer.current = setTimeout(() => void runSearch(query), 350);
+    return () => { if (timer.current) clearTimeout(timer.current); };
   }, [query, runSearch]);
+  useEffect(() => () => requests.current.invalidate(), []);
+
+  function changeQuery(value: string) {
+    requests.current.invalidate(); setError(""); setLoading(Boolean(value.trim()));
+    setQuery(value);
+    if (!value.trim()) setResult(initial);
+  }
 
   const total = result.notes.length + result.todos.length + result.conversations.length;
 
@@ -42,13 +58,16 @@ export function SearchView({ initial }: { initial: SearchResult }) {
         }}
         className="flex items-center gap-3"
       >
-        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索笔记、待办和对话…" aria-label="搜索" className="flex-1" autoFocus />
+        <Input value={query} onChange={(event) => changeQuery(event.target.value)} placeholder="搜索笔记、待办和对话…" aria-label="搜索" className="flex-1" autoFocus />
+        {query ? <Button type="button" variant="ghost" onClick={() => changeQuery("")}>清空</Button> : null}
         <Button type="submit" variant="secondary" disabled={loading}>搜索</Button>
       </form>
 
+      {error ? <p role="alert" className="mt-4 text-sm text-red-700">{error} <button type="button" onClick={() => void runSearch(query)} className="underline">重试</button></p> : null}
+      {!query.trim() ? <p className="mt-4 text-xs text-ink-3">最近的笔记、待办和对话</p> : null}
       {loading ? <p role="status" className="mt-4 text-sm text-ink-3">搜索中…</p> : null}
 
-      {!loading && total === 0 ? (
+      {!loading && !error && total === 0 ? (
         <EmptyState className="py-12" title={query ? `没有找到「${query.slice(0, 30)}」相关内容` : "还没有内容"} description={query ? "换个关键词试试；也可以先在对话或笔记里产生内容。" : "先去对话里聊点什么，或新建一篇笔记。"} />
       ) : null}
 

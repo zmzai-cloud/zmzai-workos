@@ -190,3 +190,9 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Scope the viewport layout to conversation pages; the shared theme stays intact. */
+.conversation-shell > div > div { height: 100dvh; overflow: hidden; }
+.conversation-shell > div > div > div { height: 100dvh; min-height: 0; }
+.conversation-shell main.page-shell { min-height: 0; display: flex; width: calc(100% - 2rem); max-width: none; padding-block: 1rem; }
+.conversation-shell main.page-shell > div { width: 100%; }

@@ -67,3 +67,10 @@ it("nextStepRank orders overdue < today < upcoming < undated", () => {
   expect(upcoming).toEqual({ bucket: 2, label: "即将到期" });
   expect(undated).toEqual({ bucket: 3, label: "未排期" });
 });
+
+it("conversation outcomes retain done items while preserving user and session scope", async () => {
+  mocks.find.mockImplementationOnce(() => chain([{ ...baseDoc, status: "done" }]));
+  const outcomes = await listTodos("u1", { sourceSessionId: "ses_1", includeCompleted: true });
+  expect(mocks.find).toHaveBeenCalledWith({ userId: "u1", sourceSessionId: "ses_1" });
+  expect(outcomes[0].status).toBe("done");
+});

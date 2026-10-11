@@ -18,16 +18,33 @@ type SaveState =
   | { kind: "error"; message: string }
   | { kind: "conflict"; current: NoteView };
 
-export function NoteEditor({ initial, onRevision, compact = false }: { initial: NoteView; onRevision?: (note: NoteView) => void; compact?: boolean }) {
+export function NoteEditor({ initial, onRevision, onReadyChange, compact = false }: { initial: NoteView; onRevision?: (note: NoteView) => void; onReadyChange?: (ready: boolean) => void; compact?: boolean }) {
   const [title, setTitle] = useState(initial.title);
   const [markdown, setMarkdown] = useState(initial.markdown);
   const [revision, setRevision] = useState(initial.revision);
   const [updatedAt, setUpdatedAt] = useState(initial.updatedAt);
   const [state, setState] = useState<SaveState>({ kind: "idle" });
+  const [blockedNavigation, setBlockedNavigation] = useState(false);
   const [preview, setPreview] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestRef = useRef({ title, markdown, revision });
   latestRef.current = { title, markdown, revision };
+  const inFlight = useRef(false);
+  const conflicted = useRef(false);
+  const safe = state.kind === "idle" || state.kind === "saved";
+  useEffect(() => {
+    if (safe) return;
+    const protect = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    const protectLink = (event: MouseEvent) => {
+      const anchor = (event.target as Element)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (anchor && anchor.target !== "_blank" && anchor.href !== window.location.href) {
+        event.preventDefault(); event.stopPropagation(); setBlockedNavigation(true);
+      }
+    };
+    window.addEventListener("beforeunload", protect);
+    document.addEventListener("click", protectLink, true);
+    return () => { window.removeEventListener("beforeunload", protect); document.removeEventListener("click", protectLink, true); };
+  }, [safe]);
   const saveNowRef = useRef<() => Promise<void>>(async () => undefined);
 
   async function patch(revisionToSend: number): Promise<Response> {
@@ -39,45 +56,46 @@ export function NoteEditor({ initial, onRevision, compact = false }: { initial: 
     });
   }
 
-  saveNowRef.current = async () => {
-    setState((previous) => (previous.kind === "conflict" ? previous : { kind: "saving" }));
-    let response: Response;
+  async function saveRevision(expectedRevision: number) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    conflicted.current = false;
+    onReadyChange?.(false);
+    setState({ kind: "saving" });
     try {
-      response = await patch(latestRef.current.revision);
+      const response = await patch(expectedRevision);
+      if (response.status === 409) {
+        const body = await response.json() as { current?: NoteView };
+        conflicted.current = true;
+        setState({ kind: "conflict", current: body.current ?? initial });
+        return;
+      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const saved = await response.json() as { note: NoteView };
+      conflicted.current = false;
+      applyServer(saved.note);
     } catch {
-      setState({ kind: "error", message: "网络错误" });
-      return;
-    }
-    if (response.status === 409) {
-      const conflictBody = (await response.json().catch(() => null)) as { current?: NoteView } | null;
-      setState({ kind: "conflict", current: conflictBody?.current ?? { ...initial } });
-      return;
-    }
-    if (!response.ok) {
-      setState({ kind: "error", message: `HTTP ${response.status}` });
-      return;
-    }
-    const saved = (await response.json()) as { note: NoteView };
-    applyServer(saved.note);
+      setState({ kind: "error", message: "保存未完成，请重试" });
+    } finally { inFlight.current = false; }
   }
+
+  saveNowRef.current = async () => {
+    if (conflicted.current) return;
+    await saveRevision(latestRef.current.revision);
+  };
 
   async function overwriteWithLocal() {
     if (state.kind !== "conflict") return;
-    setState({ kind: "saving" });
-    const response = await patch(state.current.revision).catch(() => null);
-    if (!response || !response.ok) {
-      setState({ kind: "error", message: response ? `HTTP ${response.status}` : "网络错误" });
-      return;
-    }
-    const saved = (await response.json()) as { note: NoteView };
-    applyServer(saved.note);
+    await saveRevision(state.current.revision);
   }
 
   function applyServer(note: NoteView) {
+    latestRef.current.revision = note.revision;
     setRevision(note.revision);
     setUpdatedAt(note.updatedAt);
     onRevision?.(note);
     if (note.markdown === latestRef.current.markdown && note.title === latestRef.current.title) {
+      onReadyChange?.(true);
       setState({ kind: "saved", at: Date.now() });
     } else {
       // 保存窗口内又有编辑：立即再存一轮。
@@ -88,6 +106,8 @@ export function NoteEditor({ initial, onRevision, compact = false }: { initial: 
   }
 
   function edit(nextTitle: string, nextMarkdown: string) {
+    onReadyChange?.(false);
+    latestRef.current = { title: nextTitle, markdown: nextMarkdown, revision: latestRef.current.revision };
     setTitle(nextTitle);
     setMarkdown(nextMarkdown);
     setState((previous) => (previous.kind === "conflict" ? previous : { kind: "dirty" }));
@@ -101,6 +121,10 @@ export function NoteEditor({ initial, onRevision, compact = false }: { initial: 
 
   function takeServerVersion() {
     if (state.kind !== "conflict") return;
+    conflicted.current = false;
+    if (timer.current) clearTimeout(timer.current);
+    onRevision?.(state.current);
+    onReadyChange?.(true);
     setTitle(state.current.title);
     setMarkdown(state.current.markdown);
     setRevision(state.current.revision);
@@ -143,6 +167,7 @@ export function NoteEditor({ initial, onRevision, compact = false }: { initial: 
           ) : null}
         </div>
       </div>
+      {blockedNavigation && !safe ? <p role="status" className="mt-2 text-xs text-ink-2">请等待保存完成；保存失败或内容冲突时，请先处理再离开。</p> : null}
       <p className="mt-2 font-mono text-[11px] text-ink-3">revision {revision} · 更新于 {new Date(updatedAt).toLocaleString("zh-CN")}</p>
 
       {state.kind === "conflict" ? (
