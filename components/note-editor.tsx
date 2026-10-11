@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Badge, Button, DiffView, Markdown } from "@zmzai/theme";
 
 import type { NoteView } from "@/lib/domain/notes";
+import { NoteDraftStore } from "@/lib/note-draft";
 import { unifiedLineDiff } from "@/lib/line-diff";
 
 /** 笔记编辑器：800ms 防抖自动保存，revision 乐观并发，
@@ -19,6 +20,12 @@ type SaveState =
   | { kind: "conflict"; current: NoteView };
 
 export function NoteEditor({ initial, onRevision, onReadyChange, compact = false }: { initial: NoteView; onRevision?: (note: NoteView) => void; onReadyChange?: (ready: boolean) => void; compact?: boolean }) {
+  const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [draftStorageFailed, setDraftStorageFailed] = useState(false);
+  const reloadRef = useRef<() => Promise<void>>(async () => undefined);
+  const draftStore = useRef<NoteDraftStore | null>(null);
+  const mounted = useRef(true);
   const [title, setTitle] = useState(initial.title);
   const [markdown, setMarkdown] = useState(initial.markdown);
   const [revision, setRevision] = useState(initial.revision);
@@ -46,6 +53,43 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
     return () => { window.removeEventListener("beforeunload", protect); document.removeEventListener("click", protectLink, true); };
   }, [safe]);
   const saveNowRef = useRef<() => Promise<void>>(async () => undefined);
+
+  useEffect(() => {
+    mounted.current = true;
+    let controller: AbortController | null = null;
+    try { draftStore.current = new NoteDraftStore(window.sessionStorage, initial.noteId); } catch { /* storage notice is shown on edit */ }
+    reloadRef.current = async () => {
+      controller?.abort();
+      controller = new AbortController();
+      const signal = controller.signal;
+      setLoaded(false); setLoadFailed(false); onReadyChange?.(false);
+      const stored = draftStore.current?.read();
+      if (stored) {
+        latestRef.current = stored;
+        setTitle(stored.title); setMarkdown(stored.markdown); setRevision(stored.revision);
+        setState({ kind: "dirty" });
+      }
+      try {
+        const response = await fetch(`/api/notes/${encodeURIComponent(initial.noteId)}`, { cache: "no-store", signal });
+        if (!response.ok) throw new Error("LOAD_FAILED");
+        const { note } = await response.json() as { note: NoteView };
+        if (signal.aborted) return;
+        const recovered = draftStore.current?.recover(note);
+        const content = recovered?.draft ?? note;
+        latestRef.current = { title: content.title, markdown: content.markdown, revision: content.revision };
+        setTitle(content.title); setMarkdown(content.markdown); setRevision(content.revision); setUpdatedAt(note.updatedAt);
+        onRevision?.(note);
+        conflicted.current = recovered?.conflict ?? false;
+        if (recovered) {
+          setState(recovered.conflict ? { kind: "conflict", current: note } : { kind: "dirty" });
+          if (!recovered.conflict) timer.current = setTimeout(() => void saveNowRef.current(), 800);
+        } else { setState({ kind: "idle" }); onReadyChange?.(true); }
+        setLoaded(true);
+      } catch { if (!signal.aborted) setLoadFailed(true); }
+    };
+    void reloadRef.current();
+    return () => { mounted.current = false; controller?.abort(); };
+  }, [initial.noteId]);
 
   async function patch(revisionToSend: number): Promise<Response> {
     const snapshot = latestRef.current;
@@ -90,6 +134,8 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
   }
 
   function applyServer(note: NoteView) {
+    draftStore.current?.acknowledge(note);
+    if (!mounted.current) return;
     latestRef.current.revision = note.revision;
     setRevision(note.revision);
     setUpdatedAt(note.updatedAt);
@@ -100,6 +146,7 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
     } else {
       // 保存窗口内又有编辑：立即再存一轮。
       setState({ kind: "dirty" });
+      setDraftStorageFailed(!draftStore.current?.write(latestRef.current));
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => void saveNowRef.current(), 150);
     }
@@ -108,6 +155,7 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
   function edit(nextTitle: string, nextMarkdown: string) {
     onReadyChange?.(false);
     latestRef.current = { title: nextTitle, markdown: nextMarkdown, revision: latestRef.current.revision };
+    setDraftStorageFailed(!draftStore.current?.write(latestRef.current));
     setTitle(nextTitle);
     setMarkdown(nextMarkdown);
     setState((previous) => (previous.kind === "conflict" ? previous : { kind: "dirty" }));
@@ -123,6 +171,7 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
     if (state.kind !== "conflict") return;
     conflicted.current = false;
     if (timer.current) clearTimeout(timer.current);
+    draftStore.current?.discard();
     onRevision?.(state.current);
     onReadyChange?.(true);
     setTitle(state.current.title);
@@ -148,6 +197,7 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
         <input
+          disabled={!loaded}
           value={title}
           onChange={(event) => edit(event.target.value, markdown)}
           aria-label="笔记标题"
@@ -156,17 +206,20 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
           placeholder="无标题笔记"
         />
         <div className="flex shrink-0 items-center gap-2">
-          <Badge variant={status.tone} size="sm" aria-live="polite">{status.text}</Badge>
+          <Badge variant={loadFailed ? "danger" : !loaded ? "live" : status.tone} size="sm" aria-live="polite">{loadFailed ? "读取失败" : !loaded ? "正在读取最新版…" : status.text}</Badge>
           {!compact ? (
             <Button type="button" variant="ghost" size="sm" onClick={() => setPreview((value) => !value)}>
               {preview ? "编辑" : "预览"}
             </Button>
           ) : null}
+          {loadFailed ? <Button type="button" variant="secondary" size="sm" onClick={() => void reloadRef.current()}>重新读取</Button> : null}
           {state.kind === "error" ? (
             <Button type="button" variant="secondary" size="sm" onClick={() => void saveNowRef.current()}>重试</Button>
           ) : null}
         </div>
       </div>
+      {loadFailed ? <p role="alert" className="mt-2 text-sm text-red-700">未能读取最新版本，请重试。</p> : null}
+      {draftStorageFailed && !safe ? <p role="status" className="mt-2 text-xs text-red-700">浏览器无法暂存草稿，请保存成功后再离开。</p> : null}
       {blockedNavigation && !safe ? <p role="status" className="mt-2 text-xs text-ink-2">请等待保存完成；保存失败或内容冲突时，请先处理再离开。</p> : null}
       <p className="mt-2 font-mono text-[11px] text-ink-3">revision {revision} · 更新于 {new Date(updatedAt).toLocaleString("zh-CN")}</p>
 
@@ -190,6 +243,7 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
         </div>
       ) : (
         <textarea
+          disabled={!loaded}
           value={markdown}
           onChange={(event) => edit(title, event.target.value)}
           aria-label="笔记正文（Markdown）"
