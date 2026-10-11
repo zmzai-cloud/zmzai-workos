@@ -20,3 +20,7 @@ A local real model run failed because the local relay was unreachable. Productio
 The confirmation inspection revealed that a long outcomes list can push a pending approval above the visible messages. A persistent composer-adjacent button now scrolls to and focuses the pending approval region. The Agent remains authoritative for approvals.
 
 Deferred: global workspace filter, full notes split-view redesign, todo detail links, settings/backup relocation, and expanded memory management.
+
+A failure-path check on production reproduced lost note edits after a failed PATCH followed by browser Back/Forward. Note drafts now persist in per-tab storage. Editors fetch the latest server note before enabling editing or recovering a draft; a changed revision requires a conflict choice. Late acknowledgements only clear the content they actually saved. Storage failure is reported while the unsaved edit remains in the editor.
+
+Local recovery validation passed: aborted saves survive Back/Forward and persist after retry; a separate server edit causes a conflict while both versions remain intact; choosing the server version clears the recovered draft. The expanded suite has 90 passing tests, including four recovery/acknowledgement cases.

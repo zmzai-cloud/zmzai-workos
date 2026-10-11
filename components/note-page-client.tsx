@@ -14,7 +14,7 @@ import { NoteEditor } from "@/components/note-editor";
 export function NotePageClient({ note, workspaces }: { note: NoteView; workspaces: ConversationWorkspace[] }) {
   const router = useRouter();
   const [savedNote, setSavedNote] = useState(note);
-  const [ready, setReady] = useState(true);
+  const [ready, setReady] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
 
