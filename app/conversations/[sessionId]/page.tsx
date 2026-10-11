@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
-import { AgentRequestError, fetchAgentConversation } from "@/lib/agent-client";
+import { AgentRequestError, fetchAgentConversation, fetchAgentRecentSessions } from "@/lib/agent-client";
 import { getServerEnvironment } from "@/config/env";
 import { WorkosShell } from "@/components/workos-shell";
 import { ConversationView, type ConversationDetailWithOutcomes } from "@/components/conversation-view";
@@ -18,13 +18,14 @@ export default async function ConversationPage({ params }: { params: Promise<{ s
     const base = await fetchAgentConversation(user.id, sessionId);
     const [notes, todos] = await Promise.all([
       listNotes(user.id, { sourceSessionId: sessionId, limit: 50 }),
-      listTodos(user.id, { sourceSessionId: sessionId, limit: 100 }),
+      listTodos(user.id, { sourceSessionId: sessionId, limit: 100, includeCompleted: true }),
     ]);
     detail = { ...base, outcomes: { notes, todos } };
   } catch (error) {
     if (error instanceof AgentRequestError && error.status === 404) notFound();
     return <WorkosShell userName={user.name} email={user.email}><p role="alert" className="py-8 text-sm text-ink-2">暂时无法读取对话，请刷新重试。</p></WorkosShell>;
   }
+  const recentSessions = await fetchAgentRecentSessions(user.id, 20);
   const origin = getServerEnvironment()?.MEMORY_WEB_ORIGIN.replace(/\/$/, "") ?? null;
-  return <WorkosShell userName={user.name} email={user.email}><ConversationView initial={detail} memoryOrigin={origin} /></WorkosShell>;
+  return <WorkosShell userName={user.name} email={user.email}><ConversationView key={sessionId} recentSessions={recentSessions} initial={detail} memoryOrigin={origin} /></WorkosShell>;
 }

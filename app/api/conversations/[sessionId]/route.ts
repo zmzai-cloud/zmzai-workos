@@ -16,7 +16,7 @@ export async function GET(_request: Request, context: { params: Promise<{ sessio
     const detail = await fetchAgentConversation(user.id, sessionId);
     const [notes, todos] = await Promise.all([
       listNotes(user.id, { sourceSessionId: sessionId, limit: 50 }),
-      listTodos(user.id, { sourceSessionId: sessionId, limit: 100 }),
+      listTodos(user.id, { sourceSessionId: sessionId, limit: 100, includeCompleted: true }),
     ]);
     return NextResponse.json({ ...detail, outcomes: { notes, todos } }, { headers: { "cache-control": "no-store" } });
   } catch (error) {

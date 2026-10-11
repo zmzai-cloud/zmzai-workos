@@ -13,12 +13,14 @@ import { NoteEditor } from "@/components/note-editor";
 /** 笔记详情页：编辑器 + 来源对话 + 「在对话中继续」（只把本篇笔记内容加入新对话上下文）。 */
 export function NotePageClient({ note, workspaces }: { note: NoteView; workspaces: ConversationWorkspace[] }) {
   const router = useRouter();
+  const [savedNote, setSavedNote] = useState(note);
+  const [ready, setReady] = useState(true);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
 
   async function continueInConversation() {
-    if (starting) return;
-    const workspaceId = note.workspaceId ?? workspaces[0]?.workspaceId;
+    if (starting || !ready) return;
+    const workspaceId = savedNote.workspaceId ?? workspaces[0]?.workspaceId;
     if (!workspaceId) {
       setError("没有可用的工作空间，请先在 Agent 中创建。");
       return;
@@ -31,7 +33,7 @@ export function NotePageClient({ note, workspaces }: { note: NoteView; workspace
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           workspaceId,
-          prompt: `继续讨论我的笔记《${note.title}》（noteId: ${note.noteId}），笔记内容如下：\n\n${note.markdown.slice(0, 24_000)}`,
+          prompt: `继续讨论我的笔记《${savedNote.title}》（noteId: ${savedNote.noteId}, revision: ${savedNote.revision}），${savedNote.markdown.length > 24_000 ? "正文较长，以下仅为开头，请先用 workos_read_note 读取完整笔记。" : "笔记内容如下："}\n\n${savedNote.markdown.slice(0, 24_000)}`,
         }),
       });
       if (!response.ok) throw new Error();
@@ -53,14 +55,14 @@ export function NotePageClient({ note, workspaces }: { note: NoteView; workspace
               来源对话 <Icon name="arrow-up-right" size={12} />
             </Link>
           ) : null}
-          <Button type="button" variant="secondary" size="sm" disabled={starting} onClick={() => void continueInConversation()}>
+          <Button type="button" variant="secondary" size="sm" disabled={starting || !ready} onClick={() => void continueInConversation()}>
             在对话中继续 <Icon name="arrow-right" size={12} />
           </Button>
         </div>
       </div>
       {error ? <p role="alert" className="mb-3 text-sm text-red-700">{error}</p> : null}
       <div className="min-h-0 flex-1">
-        <NoteEditor initial={note} />
+        <NoteEditor initial={note} onRevision={setSavedNote} onReadyChange={setReady} />
       </div>
     </div>
   );

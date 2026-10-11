@@ -4,12 +4,12 @@ import { cn } from "@zmzai/theme";
 
 import "./cloud-mascot.css";
 
-/** 墨黑小云（ZMZ 吉祥物）：陪伴 / 思考 / 完成 三态。
+/** 墨黑小云（ZMZ 吉祥物）：陪伴 / 思考 / 等待 / 完成 / 错误 五态。
  *  基于品牌云 Logo 的轮廓与右上两颗圆点；小实心眼睛，无高光大眼。
  *  动画与真实运行状态绑定，状态本身另有文字说明（本组件是辅助表达）。
  *  prefers-reduced-motion 时不播放位移/循环动画，仅保留静态状态差异。 */
 
-export type CloudMascotState = "companion" | "thinking" | "complete";
+export type CloudMascotState = "companion" | "thinking" | "complete" | "waiting" | "error";
 
 export function CloudMascot({ state, size = 96, className }: { state: CloudMascotState; size?: number; className?: string }) {
   return (
@@ -18,7 +18,7 @@ export function CloudMascot({ state, size = 96, className }: { state: CloudMasco
       className={cn("relative inline-block text-ink", state === "companion" && "zmz-cloud-float", state === "complete" && "zmz-cloud-complete-lift", className)}
       style={{ width: size, height: (size * 170) / 230 }}
       role="img"
-      aria-label={state === "thinking" ? "小云正在思考" : state === "complete" ? "小云完成了任务" : "小云陪伴中"}
+      aria-label={state === "waiting" ? "小云等你确认" : state === "error" ? "小云遇到了问题" : state === "thinking" ? "小云正在思考" : state === "complete" ? "小云完成了任务" : "小云陪伴中"}
     >
       <svg viewBox="0 0 230 170" width={size} height={(size * 170) / 230} className="overflow-visible">
         {/* 云身：墨黑线条 + 白色主体 */}
@@ -43,6 +43,10 @@ export function CloudMascot({ state, size = 96, className }: { state: CloudMasco
         <g className="zmz-cloud-eyes zmz-cloud-eyes-companion">
           <circle cx={81} cy={109} r={4.8} fill="currentColor" />
           <circle cx={122} cy={109} r={4.8} fill="currentColor" />
+        </g>
+        <g className="zmz-cloud-eyes zmz-cloud-eyes-error">
+          <path d="M73 99 L89 104 M114 104 L130 99" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
+          <circle cx={81} cy={113} r={4.5} fill="currentColor" /><circle cx={122} cy={113} r={4.5} fill="currentColor" />
         </g>
         <g className="zmz-cloud-eyes zmz-cloud-eyes-thinking">
           <path d="M72 98 Q81 92 90 97" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
