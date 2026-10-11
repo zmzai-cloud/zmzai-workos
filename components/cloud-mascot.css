@@ -1,0 +1,74 @@
+/* 墨黑小云三态：状态由父级文字同时说明，动画只是辅助表达。
+   prefers-reduced-motion 下不播放位移/循环动画，仅保留静态差异。 */
+
+.zmz-cloud-body {
+  transition: transform 0.3s ease;
+}
+
+/* 陪伴：轻浮动 + 每隔几秒自然眨眼（眼睛组短暂压扁） */
+.zmz-cloud-float {
+  animation: zmz-cloud-float 4.6s ease-in-out infinite;
+}
+@keyframes zmz-cloud-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5%); }
+}
+
+.zmz-cloud-eyes circle {
+  transform-origin: center;
+  transform-box: fill-box;
+}
+.zmz-cloud-float .zmz-cloud-eyes-companion circle {
+  animation: zmz-cloud-blink 5.2s infinite;
+}
+@keyframes zmz-cloud-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  94.5%, 97% { transform: scaleY(0.12); }
+}
+
+/* 三态切换：眼睛组只保留当前态 */
+.zmz-cloud-eyes {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.zmz-cloud-eyes-companion { opacity: 1; }
+
+/* 思考：圆点约 0.6s 收起，同一位置出现小问号 */
+.zmz-cloud-dots,
+.zmz-cloud-question {
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  transform-origin: 175px 45px;
+}
+.zmz-cloud-dots { opacity: 1; }
+.zmz-cloud-question { opacity: 0; transform: scale(0.5); }
+
+/* 完成：短暂上扬一次 */
+@keyframes zmz-cloud-complete-lift {
+  0% { transform: translateY(0); }
+  35% { transform: translateY(-7%); }
+  100% { transform: translateY(0); }
+}
+.zmz-cloud-complete-lift {
+  animation: zmz-cloud-complete-lift 0.7s ease;
+}
+
+/* 状态耦合：父级通过 data-state 属性控制（组件包装在 [data-cloud-state] 下） */
+[data-cloud-state="thinking"] .zmz-cloud-eyes-companion { opacity: 0; }
+[data-cloud-state="thinking"] .zmz-cloud-eyes-thinking { opacity: 1; }
+[data-cloud-state="thinking"] .zmz-cloud-dots { opacity: 0; transform: scale(0.2); }
+[data-cloud-state="thinking"] .zmz-cloud-question { opacity: 1; transform: scale(1); }
+
+[data-cloud-state="complete"] .zmz-cloud-eyes-companion { opacity: 0; }
+[data-cloud-state="complete"] .zmz-cloud-eyes-complete { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .zmz-cloud-float,
+  .zmz-cloud-float .zmz-cloud-eyes-companion circle,
+  .zmz-cloud-complete-lift {
+    animation: none !important;
+  }
+  .zmz-cloud-dots,
+  .zmz-cloud-question {
+    transition-duration: 0.01ms;
+  }
+}

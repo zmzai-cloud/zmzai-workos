@@ -10,7 +10,7 @@ const environmentSchema = z.object({
   MONGODB_URI: z.string().min(1),
   AUTH_SECRET: z.string().min(32),
   SESSION_COOKIE_NAME: z.string().regex(/^[a-zA-Z0-9_-]+$/).default("muzhi_session"),
-  AGENT_INTERNAL_URL: z.string().url().default("https://a.zmzai.cloud"),
+  AGENT_INTERNAL_URL: z.string().url().default("https://agent.zmzai.cloud"),
   MEMORY_WEB_ORIGIN: z.string().url().refine((value) => {
     const url = new URL(value);
     return (url.protocol === "https:" || (process.env.NODE_ENV !== "production" && url.hostname === "localhost")) &&

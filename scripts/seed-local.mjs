@@ -102,8 +102,19 @@ const Workspace = conn.model("ZmzaiAgentWorkspace", workspaceSchema);
 const Task = conn.model("ZmzaiAgentTask", taskSchema);
 
 const email = "muzhi@example.com";
-let user = await User.findOne({ email }).lean();
-if (!user) user = await User.create({ name: "牧之", email, passwordHash: "seed-only", role: "user", status: "active", emailVerified: true });
+// SEED_USER_ID=生产用户 ObjectId 时，本地种子沿用该 id——本地 agent 走生产
+// relay 时才能按真实用户计量计费（relay 只认它库里的用户）。
+const seedUserId = process.env.SEED_USER_ID?.trim() || null;
+let user = seedUserId
+  ? await (async () => {
+      const existing = await User.findById(seedUserId).lean();
+      if (existing) return existing;
+      return User.create({ _id: seedUserId, name: "牧之", email, passwordHash: "seed-only", role: "admin", status: "active", emailVerified: true });
+    })()
+  : await (async () => {
+      const found = await User.findOne({ email }).lean();
+      return found ?? User.create({ name: "牧之", email, passwordHash: "seed-only", role: "user", status: "active", emailVerified: true });
+    })();
 
 const token = randomBytes(32).toString("base64url");
 await Session.deleteMany({ userId: user._id });
@@ -112,7 +123,9 @@ await Session.create({ userId: user._id, tokenHash: hashToken(AUTH_SECRET, token
 await Workspace.deleteMany({ userId: String(user._id) });
 await Workspace.create([
   {
-    workspaceId: "ws_seed_1", userId: String(user._id), name: "写作智能体", description: "起草与润色", defaultModel: "gpt-4o",
+    workspaceId: "ws_seed_1", userId: String(user._id), name: "写作智能体", description: "起草与润色", defaultModel: "glm-5.3",
+    approvalMode: "auto",
+    prompt: "这是个人工作空间助手。用户的笔记与待办是产品级数据：用户要求保存笔记时用 workos_create_note，创建待办时用 workos_create_todo（改写已有内容用 workos_read_note / workos_update_note / workos_update_todo，改写需用户确认）。不要在沙箱文件系统里另建一套笔记或待办文件。",
     knowledgeBase: [
       { entryId: "e1", title: "API 规范", content: "REST 命名规范……" },
       { entryId: "e2", title: "编码规范", content: "TypeScript 严格模式……" },
@@ -120,7 +133,7 @@ await Workspace.create([
     ],
   },
   {
-    workspaceId: "ws_seed_2", userId: String(user._id), name: "研究智能体", description: "检索与摘要", defaultModel: "gpt-4o-mini",
+    workspaceId: "ws_seed_2", userId: String(user._id), name: "研究智能体", description: "检索与摘要", defaultModel: "glm-5.3",
     knowledgeBase: [{ entryId: "e4", title: "信源清单", content: "……" }],
   },
 ]);

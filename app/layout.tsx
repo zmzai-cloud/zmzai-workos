@@ -6,8 +6,8 @@ const serif = Noto_Serif_SC({ subsets: ["latin"], weight: ["400", "700"], variab
 const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "700"], variable: "--font-mono", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Index · zmzai.cloud",
-  description: "AI 时代的个人工作台 · zmzai cloud 子产品",
+  title: "个人 AI 工作空间 · ZMZ AI",
+  description: "与 AI 对话，整理笔记和待办，从记忆中继续工作。",
 };
 
 export const viewport: Viewport = { themeColor: "#FFFFFF" };

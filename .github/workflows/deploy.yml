@@ -14,7 +14,11 @@ env:
   HK_USER: root
 
 jobs:
+  quality:
+    uses: ./.github/workflows/checks.yml
+
   deploy:
+    needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

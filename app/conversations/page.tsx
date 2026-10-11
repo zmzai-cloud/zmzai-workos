@@ -1,19 +1,26 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@zmzai/theme";
 import { getCurrentUser } from "@/lib/auth/session";
-import { fetchAllAgentWorkspaces } from "@/lib/agent-client";
+import { fetchAgentSessionPage, fetchAllAgentWorkspaces } from "@/lib/agent-client";
 import { WorkosShell } from "@/components/workos-shell";
-import { ConversationChooser } from "@/components/conversation-chooser";
+import { ConversationsView } from "@/components/conversations-view";
 
 export const dynamic = "force-dynamic";
-export default async function ConversationsPage() {
+export default async function ConversationsPage({ searchParams }: { searchParams: Promise<{ cursor?: string }> }) {
+  const cursor = (await searchParams).cursor;
   const user = await getCurrentUser();
   if (!user) redirect("/");
-  let workspaces: Awaited<ReturnType<typeof fetchAllAgentWorkspaces>> = [];
-  let unavailable = false;
-  try { workspaces = await fetchAllAgentWorkspaces(user.id); } catch { unavailable = true; }
+  const [workspaces, page] = await Promise.all([
+    fetchAllAgentWorkspaces(user.id).catch(() => []),
+    fetchAgentSessionPage(user.id, { limit: 30, cursor }).catch(() => ({ items: [], nextCursor: null })),
+  ]);
   return <WorkosShell userName={user.name} email={user.email}>
-    <PageHeader icon="sparkle" title="开始对话" description="选择工作空间后，Agent 会在该空间的记忆中寻找相关背景。" className="pb-8" />
-    {unavailable ? <p role="alert" className="text-sm text-ink-2">暂时无法读取工作空间，请刷新重试。</p> : workspaces.length ? <ConversationChooser workspaces={workspaces} /> : <p className="text-sm text-ink-2">还没有可用的工作空间。请先在 Agent 中创建一个。</p>}
+    <PageHeader icon="message" title="对话" description="从一个想法开始，让 AI 帮你整理成笔记和待办。" className="pb-8" />
+    <ConversationsView workspaces={workspaces} sessions={page.items} />
+    <nav aria-label="对话分页" className="mt-6 flex max-w-4xl justify-between gap-3 text-sm">
+      {cursor ? <Link href="/conversations" className="underline">返回最新对话</Link> : <span />}
+      {page.nextCursor ? <Link href={`/conversations?cursor=${encodeURIComponent(page.nextCursor)}`} className="underline">更早的对话</Link> : null}
+    </nav>
   </WorkosShell>;
 }

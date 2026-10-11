@@ -10,6 +10,7 @@ export type AgentTask = {
   workspaceId: string;
   updatedAt: string;
   runStatus: string | null;
+  sessionId: string | null;
   attention: string | null;
 };
 
@@ -65,6 +66,7 @@ export async function fetchAgentSummary(userId: string): Promise<AgentSummary> {
           workspaceId: asString(record.workspaceId),
           updatedAt: asString(record.updatedAt),
           runStatus: typeof record.runStatus === "string" ? record.runStatus : null,
+          sessionId: typeof record.sessionId === "string" ? record.sessionId : null,
           attention: typeof record.attention === "string" ? record.attention : null,
         };
       }).filter((task) => task.taskId !== ""),
@@ -204,4 +206,81 @@ export async function fetchAgentEventStream(userId: string, runId: string, since
     if (error instanceof AgentRequestError) throw error;
     throw new AgentRequestError(503);
   } finally { clearTimeout(timeout); }
+}
+
+export type AgentSessionListItem = {
+  sessionId: string;
+  title: string;
+  workspaceId: string;
+  workspaceName: string | null;
+  updatedAt: string | null;
+  latestRun: { runId: string; status: string; active: boolean } | null;
+};
+
+export async function fetchAgentSessionPage(userId: string, options: { limit?: number; after?: string; cursor?: string; q?: string; stable?: boolean } = {}): Promise<{ items: AgentSessionListItem[]; nextCursor: string | null }> {
+  const params = new URLSearchParams({ limit: String(options.limit ?? 20) });
+  if (options.stable) params.set("order", "stable");
+  if (options.after) params.set("after", options.after);
+  if (options.cursor) params.set("cursor", options.cursor);
+  if (options.q) params.set("q", options.q);
+  const path = identityPath(`/api/internal/workos/sessions?${params}`, userId);
+  const body = await (await agentRequest(path)).json() as { items?: unknown; nextCursor?: unknown };
+  if (!Array.isArray(body.items) || (body.nextCursor !== null && typeof body.nextCursor !== "string")) throw new AgentRequestError(502);
+  const items = body.items.map((item) => {
+    if (!item || typeof item !== "object") throw new AgentRequestError(502);
+    const record = item as Record<string, unknown>;
+    if (typeof record.sessionId !== "string" || !record.sessionId || typeof record.workspaceId !== "string") throw new AgentRequestError(502);
+    const latestRun = record.latestRun as Record<string, unknown> | null | undefined;
+    return {
+      sessionId: record.sessionId, title: asString(record.title) || "未命名对话", workspaceId: record.workspaceId,
+      workspaceName: typeof record.workspaceName === "string" ? record.workspaceName : null,
+      updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : null,
+      latestRun: latestRun && typeof latestRun === "object" ? { runId: asString(latestRun.runId), status: asString(latestRun.status), active: latestRun.active === true } : null,
+    };
+  });
+  return { items, nextCursor: body.nextCursor as string | null };
+}
+
+/** Recent UI summaries may degrade; backups use the strict paginated API instead. */
+export async function fetchAgentRecentSessions(userId: string, limit = 20): Promise<AgentSessionListItem[]> {
+  try { return (await fetchAgentSessionPage(userId, { limit })).items; }
+  catch { return []; }
+}
+
+export async function searchAgentSessions(userId: string, q: string, limit = 8): Promise<AgentSessionListItem[]> {
+  return (await fetchAgentSessionPage(userId, { q, limit })).items;
+}
+
+export async function fetchAllAgentSessions(userId: string): Promise<AgentSessionListItem[]> {
+  const items: AgentSessionListItem[] = [];
+  const seen = new Set<string>();
+  let after: string | undefined;
+  do {
+    const page = await fetchAgentSessionPage(userId, { limit: 100, stable: true, after });
+    for (const item of page.items) {
+      if (seen.has(item.sessionId)) throw new AgentRequestError(502);
+      seen.add(item.sessionId); items.push(item);
+    }
+    if (items.length > 2_000) throw new Error("BACKUP_LIMIT_EXCEEDED");
+    if (page.nextCursor && (page.items.length === 0 || page.nextCursor !== page.items.at(-1)?.sessionId || page.nextCursor === after)) throw new AgentRequestError(502);
+    after = page.nextCursor ?? undefined;
+  } while (after);
+  return items;
+}
+
+/** 对话页审批回复（once / always / reject），透传 Agent 的 404 语义。 */
+export async function replyAgentPermission(input: {
+  userId: string;
+  sessionId: string;
+  requestId: string;
+  reply: "once" | "always" | "reject";
+  feedback?: string;
+}): Promise<{ resolved: boolean }> {
+  const path = `/api/internal/workos/sessions/${encodeURIComponent(input.sessionId)}/permissions/${encodeURIComponent(input.requestId)}`;
+  const body = await (await agentRequest(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ userId: input.userId, reply: input.reply, ...(input.feedback ? { feedback: input.feedback } : {}) }),
+  })).json().catch(() => null) as { resolved?: boolean } | null;
+  return { resolved: body?.resolved === true };
 }

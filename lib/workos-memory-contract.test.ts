@@ -5,6 +5,8 @@ vi.mock("@/config/env", () => ({ getServerEnvironment: () => ({
   AGENT_INTERNAL_URL: "https://agent.test", WORKOS_SERVICE_SECRET_CURRENT: "fixture-service-secret",
 }) }));
 vi.mock("@/lib/auth/session", () => ({ getCurrentUser: async () => ({ id: fixture.userId }) }));
+vi.mock("@/lib/domain/notes", () => ({ listNotes: async () => [], getNote: vi.fn(), createNote: vi.fn(), updateNote: vi.fn() }));
+vi.mock("@/lib/domain/todos", () => ({ listTodos: async () => [], getTodo: vi.fn(), createTodo: vi.fn(), updateTodo: vi.fn() }));
 
 import { GET as readConversation } from "@/app/api/conversations/[sessionId]/route";
 import { GET as readEvents } from "@/app/api/conversations/[sessionId]/events/route";
@@ -63,7 +65,7 @@ describe("Agent → WorkOS memory contract", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     const detail = await response.json() as AgentConversationDetail;
-    expect(detail).toEqual(upstream);
+    expect(detail).toEqual({ ...upstream, outcomes: { notes: [], todos: [] } });
     expect(fixture.calls[0].url.searchParams.get("userId")).toBe(ownerA);
     expect(fixture.calls[0].init.cache).toBe("no-store");
     const view = memoryView(detail.memory);
