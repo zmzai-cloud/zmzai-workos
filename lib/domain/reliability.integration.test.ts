@@ -55,6 +55,11 @@ describe.skipIf(!uri)("real Mongo replica-set reliability", () => {
     expect(await DomainActionModel.countDocuments({})).toBe(1);
     expect(await executeDomainAction(action(kind))).toMatchObject({ ok: true, replayed: true });
   });
+  it("allows a blank manual note to be created and edited later", async () => {
+    const note = await createNote(userId, { title: "空白笔记", markdown: "", workspaceId: null });
+    expect(note.markdown).toBe("");
+    expect((await updateNote(userId, note.noteId, note.revision, { markdown: "后来写入" })).markdown).toBe("后来写入");
+  });
   it("failure after writing the note rolls back the note and ledger; retry succeeds once", async () => {
     vi.spyOn(DomainActionModel, "updateOne").mockImplementationOnce(() => { throw new Error("injected failure before ledger commit"); });
     expect(await executeDomainAction(action())).toMatchObject({ ok: false, error: "EXECUTION_FAILED" });

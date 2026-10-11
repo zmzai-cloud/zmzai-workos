@@ -7,7 +7,7 @@ const noteSchema = new Schema(
     userId: { type: String, required: true, immutable: true, index: true },
     workspaceId: { type: String, default: null, immutable: true },
     title: { type: String, required: true, maxlength: 240 },
-    markdown: { type: String, required: true, maxlength: 256 * 1024 },
+    markdown: { type: String, default: "", maxlength: 256 * 1024 },
     revision: { type: Number, required: true, min: 1, default: 1 },
     sourceSessionId: { type: String, default: null, immutable: true },
     sourceRunId: { type: String, default: null, immutable: true },
