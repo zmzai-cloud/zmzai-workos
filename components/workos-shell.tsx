@@ -34,7 +34,7 @@ export function WorkosShell({
 }) {
   const pathname = usePathname() ?? "/dashboard";
   return (
-    <div className={/^\/conversations\/[^/]+$/.test(pathname) ? "conversation-shell" : undefined}><AppShell
+    <div className={/^\/conversations\/[^/]+$/.test(pathname) ? "conversation-shell" : /^\/notes\/[^/]+$/.test(pathname) ? "note-detail-shell" : undefined}><AppShell
       brand={{ label: "个人工作空间", suffix: "ZMZ AI", href: "/" }}
       sections={sections}
       pathname={pathname}

@@ -1,6 +1,6 @@
 # Note writing experience
 
-The user reports that note input is only a few lines high and is not a proper editor. This is a correction within the authorized personal-workspace UI work. An optional preference question offered visual writing (recommended) or enhanced Markdown; pending a reply, use visual writing with a source fallback.
+The user reports that note input is only a few lines high and is not a proper editor. This is a correction within the authorized personal-workspace UI work. The user selected visual writing, like Notion/Typora, with a Markdown source fallback.
 
 Preserve the white/ink/cloud identity, Markdown storage/API, existing serial auto-save, revision conflicts, latest-note conversation context and per-tab draft recovery.
 

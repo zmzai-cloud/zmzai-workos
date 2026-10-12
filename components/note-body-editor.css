@@ -1,0 +1,56 @@
+.note-writing-surface { margin-top: 1rem; border: 1px solid var(--color-line); background: var(--color-paper); border-radius: 3px; overflow: hidden; }
+.note-editor-controls { display: flex; flex: none; align-items: center; justify-content: space-between; gap: .75rem; padding: .5rem .75rem; border-bottom: 1px solid var(--color-line); background: var(--color-surface); }
+.note-editor-modes { display: flex; flex: none; gap: .25rem; }
+.note-editor-modes button { padding: .3rem .65rem; font-size: .8125rem; color: var(--color-ink-2); border-radius: 3px; }
+.note-editor-modes button[aria-pressed="true"] { background: var(--color-paper); color: var(--color-ink); font-weight: 600; box-shadow: 0 1px 2px #00000010; }
+.note-editor-modes button:hover:not(:disabled) { color: var(--color-ink); }
+.note-editor-modes button:disabled { opacity: .45; cursor: not-allowed; }
+.note-format-toolbar { display: flex; flex: none; align-items: center; gap: .125rem; overflow-x: auto; padding: .35rem .5rem; border-bottom: 1px solid var(--color-line); scrollbar-width: thin; }
+.note-format-toolbar select { flex: none; width: 5.5rem; height: 2rem; padding-inline: .4rem; background: transparent; font-size: .8125rem; color: var(--color-ink); }
+.note-format-button { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 2rem; height: 2rem; border-radius: 3px; font-size: .9375rem; color: var(--color-ink-2); cursor: pointer; }
+.note-format-button:hover:not(:disabled), .note-format-button[aria-pressed="true"] { background: var(--color-surface-3); color: var(--color-ink); }
+.note-format-button:disabled { opacity: .35; cursor: not-allowed; }
+.note-toolbar-divider { flex: none; height: 1.125rem; width: 1px; margin-inline: .3rem; background: var(--color-line); }
+.note-link-form { display: flex; flex: none; align-items: center; gap: .5rem; padding: .75rem; border-bottom: 1px solid var(--color-line); font-size: .8125rem; }
+.note-link-form button { flex: none; padding: .3rem .5rem; color: var(--color-ink); }
+.note-editor-notice { flex: none; padding: .5rem .75rem; border-bottom: 1px solid var(--color-line); font-size: .75rem; line-height: 1.6; color: var(--color-ink-2); }
+.note-body-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--color-line) transparent; }
+.note-tiptap-content { height: 100%; }
+.note-writing-surface .tiptap, .note-reading-page { min-height: 100%; max-width: 76ch; margin-inline: auto; padding: 1.5rem 2rem 4rem; color: var(--color-ink); font-size: 1rem; line-height: 1.85; overflow-wrap: anywhere; }
+.note-writing-surface .tiptap { outline: none; white-space: pre-wrap; }
+.note-writing-surface .tiptap > * + * { margin-top: .9em; }
+.note-writing-surface .tiptap :is(h1,h2,h3,h4,h5,h6) { font-family: var(--font-serif); font-weight: 700; line-height: 1.4; margin-top: 1.5em; margin-bottom: .55em; }
+.note-writing-surface .tiptap > :first-child { margin-top: 0; }
+.note-writing-surface .tiptap h1 { font-size: 1.8rem; }
+.note-writing-surface .tiptap h2 { font-size: 1.45rem; }
+.note-writing-surface .tiptap h3 { font-size: 1.2rem; }
+.note-writing-surface .tiptap :is(h4,h5,h6) { font-size: 1.05rem; }
+.note-writing-surface .tiptap :is(ul,ol) { padding-left: 1.5rem; }
+.note-writing-surface .tiptap ul { list-style: disc; }
+.note-writing-surface .tiptap ol { list-style: decimal; }
+.note-writing-surface .tiptap li + li { margin-top: .3em; }
+.note-writing-surface .tiptap ul[data-type="taskList"] { list-style: none; padding: 0; }
+.note-writing-surface .tiptap ul[data-type="taskList"] > li { display: flex; align-items: flex-start; gap: .6rem; }
+.note-writing-surface .tiptap ul[data-type="taskList"] > li > label { flex: none; padding-top: .15rem; }
+.note-writing-surface .tiptap ul[data-type="taskList"] > li > div { flex: 1; min-width: 0; }
+.note-writing-surface .tiptap input[type="checkbox"] { accent-color: var(--color-ink); width: 1rem; height: 1rem; cursor: pointer; }
+.note-writing-surface .tiptap blockquote { border-left: 1px solid var(--color-line); padding-left: 1rem; color: var(--color-ink-2); }
+.note-writing-surface .tiptap pre { white-space: pre; overflow-x: auto; background: var(--color-surface); padding: 1rem; border-radius: 3px; font-family: var(--font-mono); font-size: .8125rem; line-height: 1.7; }
+.note-writing-surface .tiptap code { font-family: var(--font-mono); font-size: .85em; background: var(--color-surface); padding: .15em .3em; border-radius: 3px; }
+.note-writing-surface .tiptap pre code { padding: 0; background: transparent; font-size: inherit; }
+.note-writing-surface .tiptap a { text-decoration: underline; text-underline-offset: .18em; cursor: text; }
+.note-writing-surface .tiptap img { max-width: 100%; height: auto; }
+.note-writing-surface .tiptap .tableWrapper { overflow-x: auto; }
+.note-writing-surface .tiptap table { border-collapse: collapse; table-layout: fixed; width: 100%; margin-block: 1rem; }
+.note-writing-surface .tiptap :is(th,td) { border: 1px solid var(--color-line); padding: .5rem .7rem; vertical-align: top; position: relative; }
+.note-writing-surface .tiptap th { background: var(--color-surface); font-weight: 600; }
+.note-writing-surface .tiptap .selectedCell::after { content: ""; position: absolute; inset: 0; background: #0000000c; pointer-events: none; }
+.note-writing-surface [data-empty="true"] .tiptap > p:first-child::before { content: "写下想法，或输入 # 标题、- 列表…"; float: left; height: 0; pointer-events: none; color: var(--color-ink-2); }
+.note-source-editor { min-height: 0; flex: 1; width: 100%; resize: none; border: 0; background: transparent; padding: 1.5rem 2rem; font-family: var(--font-mono); font-size: .875rem; line-height: 1.85; color: var(--color-ink); outline: none; }
+.note-source-editor::placeholder { color: var(--color-ink-2); }
+.note-editor-footer { display: flex; flex: none; align-items: center; justify-content: space-between; gap: .75rem; padding: .4rem .75rem; border-top: 1px solid var(--color-line); color: var(--color-ink-2); font-size: .6875rem; }
+@media (max-width: 640px) {
+  .note-editor-controls > span { display: none; }
+  .note-writing-surface .tiptap, .note-reading-page, .note-source-editor { padding: 1.25rem 1rem 3rem; }
+  .note-format-button { width: 2.5rem; height: 2.5rem; }
+}

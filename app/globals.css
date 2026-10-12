@@ -196,3 +196,9 @@
 .conversation-shell > div > div > div { height: 100dvh; min-height: 0; }
 .conversation-shell main.page-shell { min-height: 0; display: flex; width: calc(100% - 2rem); max-width: none; padding-block: 1rem; }
 .conversation-shell main.page-shell > div { width: 100%; }
+
+/* Note writing needs a definite viewport height, not a min-height chain. */
+.note-detail-shell > div > div { height: 100dvh; overflow: hidden; }
+.note-detail-shell > div > div > div { height: 100dvh; min-height: 0; }
+.note-detail-shell main.page-shell { display: flex; min-height: 0; width: calc(100% - 2.5rem); max-width: 72rem; padding-block: 1rem; }
+.note-detail-shell main.page-shell > div { width: 100%; }
