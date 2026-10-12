@@ -12,7 +12,7 @@ import { NoteModel } from "@/models/note";
 import { TodoModel } from "@/models/todo";
 import { DomainActionModel } from "@/models/domain-action";
 import { domainActionInput, executeDomainAction } from "./actions";
-import { createNote, updateNote } from "./notes";
+import { createNote, updateNote, listNoteSummaries, noteNavigationQuery } from "./notes";
 import { exportWorkspace, importWorkspace } from "./backup";
 
 const uri = process.env.WORKOS_TEST_MONGODB_URI;
@@ -59,6 +59,19 @@ describe.skipIf(!uri)("real Mongo replica-set reliability", () => {
     const note = await createNote(userId, { title: "空白笔记", markdown: "", workspaceId: null });
     expect(note.markdown).toBe("");
     expect((await updateNote(userId, note.noteId, note.revision, { markdown: "后来写入" })).markdown).toBe("后来写入");
+  });
+  it("searches all owned note titles literally, paginates and excludes note bodies", async () => {
+    await NoteModel.insertMany(Array.from({length: 53}, (_, index) => ({ noteId: `note_nav${index}`, userId,
+      title: index === 0 ? "literal [cloud].*" : "云朵笔记", markdown: "private body", revision: 1 })));
+    await NoteModel.create({noteId:"note_otherowner",userId:"507f1f77bcf86cd799439012",title:"literal [cloud].*",markdown:"another user's body"});
+    const first = await listNoteSummaries(userId,noteNavigationQuery.parse({}));
+    expect(first.notes).toHaveLength(50); expect(first.hasMore).toBe(true);
+    const second = await listNoteSummaries(userId,noteNavigationQuery.parse({offset:50}));
+    expect(second.notes).toHaveLength(3); expect(second.hasMore).toBe(false);
+    expect(new Set([...first.notes,...second.notes].map(n=>n.noteId)).size).toBe(53);
+    const matched = await listNoteSummaries(userId,noteNavigationQuery.parse({q:"[cloud].*"}));
+    expect(matched.notes).toHaveLength(1); expect(matched.notes[0].noteId).toBe("note_nav0");
+    expect(Object.keys(matched.notes[0]).sort()).toEqual(["noteId","revision","sourceSessionId","title","updatedAt"]);
   });
   it("failure after writing the note rolls back the note and ledger; retry succeeds once", async () => {
     vi.spyOn(DomainActionModel, "updateOne").mockImplementationOnce(() => { throw new Error("injected failure before ledger commit"); });

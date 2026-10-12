@@ -7,6 +7,7 @@ import { Plugin } from "@tiptap/pm/state";
 import { Markdown as MarkdownExtension } from "@tiptap/markdown";
 import { Markdown } from "@zmzai/theme";
 import { canEditVisually, NOTE_MAX_LENGTH, noteExtensions, safeEditorLink } from "@/lib/note-markdown";
+import { NoteEditorActions } from "@/components/note-editor-actions";
 import "./note-body-editor.css";
 
 type Mode = "visual" | "source" | "preview";
@@ -123,6 +124,7 @@ export default function NoteBodyEditor({ value, disabled, onChange, onComposingC
   }
 
   return <div className="note-writing-surface flex min-h-0 flex-1 flex-col">
+    <NoteEditorActions editor={editor} enabled={!disabled && !composing && mode === "visual"} onLink={() => { setLinkValue(String(editor?.getAttributes("link").href ?? "")); setLinkOpen(true); }} />
     <div className="note-editor-controls">
       <div className="note-editor-modes" role="group" aria-label="笔记编辑模式">
         {([["visual", "写作"], ["source", "源码"], ["preview", "预览"]] as const).map(([key, label]) => <button key={key} type="button" aria-pressed={mode === key} disabled={disabled || composing || !editor} onClick={() => selectMode(key)}>{label}</button>)}

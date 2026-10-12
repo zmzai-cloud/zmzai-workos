@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
 import { getCurrentUser } from "@/lib/auth/session";
-import { WorkosShell } from "@/components/workos-shell";
 import { NotePageClient } from "@/components/note-page-client";
 import { getNote } from "@/lib/domain/notes";
 import { fetchAllAgentWorkspaces } from "@/lib/agent-client";
@@ -16,9 +15,5 @@ export default async function NotePage({ params }: { params: Promise<{ noteId: s
   const note = await getNote(user.id, noteId);
   if (!note) notFound();
   const workspaces = await fetchAllAgentWorkspaces(user.id).catch(() => []);
-  return (
-    <WorkosShell userName={user.name} email={user.email}>
-      <NotePageClient key={noteId} note={note} workspaces={workspaces} />
-    </WorkosShell>
-  );
+  return <NotePageClient key={noteId} note={note} workspaces={workspaces} />;
 }

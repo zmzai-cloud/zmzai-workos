@@ -9,6 +9,7 @@ import { Button, Icon } from "@zmzai/theme";
 import type { ConversationWorkspace } from "@/lib/agent-client";
 import type { NoteView } from "@/lib/domain/notes";
 import { NoteEditor } from "@/components/note-editor";
+import { NOTE_CHANGED_EVENT, NOTE_READY_EVENT } from "@/lib/note-navigation";
 
 /** 笔记详情页：编辑器 + 来源对话 + 「在对话中继续」（只把本篇笔记内容加入新对话上下文）。 */
 export function NotePageClient({ note, workspaces }: { note: NoteView; workspaces: ConversationWorkspace[] }) {
@@ -48,7 +49,8 @@ export function NotePageClient({ note, workspaces }: { note: NoteView; workspace
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <Link href="/notes" className="text-xs text-ink-2 underline underline-offset-4">← 全部笔记</Link>
+        <Link href="/notes" className="text-xs text-ink-2 underline underline-offset-4 lg:hidden">← 笔记列表</Link>
+        <span className="hidden text-xs text-ink-2 lg:inline">笔记 · 自动保存</span>
         <div className="flex items-center gap-2">
           {note.sourceSessionId ? (
             <Link href={`/conversations/${encodeURIComponent(note.sourceSessionId)}`} className="inline-flex items-center gap-1 text-xs text-ink-2 underline underline-offset-4 hover:text-ink">
@@ -62,7 +64,11 @@ export function NotePageClient({ note, workspaces }: { note: NoteView; workspace
       </div>
       {error ? <p role="alert" className="mb-3 text-sm text-red-700">{error}</p> : null}
       <div className="flex min-h-0 flex-1 flex-col">
-        <NoteEditor initial={note} onRevision={setSavedNote} onReadyChange={setReady} />
+        <NoteEditor initial={note} onRevision={(saved) => {
+          setSavedNote(saved); window.dispatchEvent(new CustomEvent(NOTE_CHANGED_EVENT, { detail: saved }));
+        }} onReadyChange={(safe) => {
+          setReady(safe); window.dispatchEvent(new CustomEvent(NOTE_READY_EVENT, { detail: { noteId: note.noteId, ready: safe } }));
+        }} />
       </div>
     </div>
   );
