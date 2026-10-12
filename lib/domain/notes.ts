@@ -39,6 +39,27 @@ export class RevisionConflictError extends Error {
   }
 }
 
+export type NoteSummary = Pick<NoteView, "noteId" | "title" | "revision" | "updatedAt" | "sourceSessionId">;
+export const noteNavigationQuery = z.object({
+  q: z.string().trim().max(120).default(""),
+  offset: z.coerce.number().int().min(0).max(500_000).default(0),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+export async function listNoteSummaries(userId: string, options: z.output<typeof noteNavigationQuery>) {
+  const literal = options.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const docs = await NoteModel.find({ userId, ...(literal ? { title: { $regex: literal, $options: "i" } } : {}) })
+    .select("noteId title revision updatedAt sourceSessionId -_id")
+    .sort({ updatedAt: -1, noteId: -1 }).skip(options.offset).limit(options.limit + 1).lean();
+  return {
+    notes: docs.slice(0, options.limit).map((doc): NoteSummary => ({
+      noteId: doc.noteId, title: doc.title, revision: doc.revision,
+      updatedAt: doc.updatedAt.toISOString(), sourceSessionId: doc.sourceSessionId ?? null,
+    })),
+    hasMore: docs.length > options.limit,
+  };
+}
+
 type NoteDoc = {
   noteId: string;
   userId: string;
