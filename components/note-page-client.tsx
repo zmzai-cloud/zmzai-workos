@@ -46,7 +46,7 @@ export function NotePageClient({ note, workspaces }: { note: NoteView; workspace
   }
 
   return (
-    <div className="mx-auto flex min-h-[70vh] w-full max-w-3xl flex-col">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <Link href="/notes" className="text-xs text-ink-2 underline underline-offset-4">← 全部笔记</Link>
         <div className="flex items-center gap-2">
@@ -61,7 +61,7 @@ export function NotePageClient({ note, workspaces }: { note: NoteView; workspace
         </div>
       </div>
       {error ? <p role="alert" className="mb-3 text-sm text-red-700">{error}</p> : null}
-      <div className="min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 flex-col">
         <NoteEditor initial={note} onRevision={setSavedNote} onReadyChange={setReady} />
       </div>
     </div>

@@ -1,8 +1,9 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 
-import { Badge, Button, DiffView, Markdown } from "@zmzai/theme";
+import { Badge, Button, DiffView } from "@zmzai/theme";
 
 import type { NoteView } from "@/lib/domain/notes";
 import { NoteDraftStore } from "@/lib/note-draft";
@@ -10,6 +11,8 @@ import { unifiedLineDiff } from "@/lib/line-diff";
 
 /** 笔记编辑器：800ms 防抖自动保存，revision 乐观并发，
  *  409 时保留本地草稿并给出对比与两种恢复选择。保存状态以服务端结果为准。 */
+
+const NoteBodyEditor = dynamic(() => import("@/components/note-body-editor"), { ssr: false, loading: () => <div className="mt-4 min-h-0 flex-1 border border-line bg-paper p-6 text-sm text-ink-2" role="status">正在准备编辑器…</div> });
 
 type SaveState =
   | { kind: "idle" }
@@ -32,13 +35,15 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
   const [updatedAt, setUpdatedAt] = useState(initial.updatedAt);
   const [state, setState] = useState<SaveState>({ kind: "idle" });
   const [blockedNavigation, setBlockedNavigation] = useState(false);
-  const [preview, setPreview] = useState(false);
+  const [composing, setComposing] = useState(false);
+  const composingRef = useRef(false);
+  const savedRef = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestRef = useRef({ title, markdown, revision });
   latestRef.current = { title, markdown, revision };
   const inFlight = useRef(false);
   const conflicted = useRef(false);
-  const safe = state.kind === "idle" || state.kind === "saved";
+  const safe = (state.kind === "idle" || state.kind === "saved") && !composing;
   useEffect(() => {
     if (safe) return;
     const protect = (event: BeforeUnloadEvent) => { event.preventDefault(); };
@@ -62,6 +67,7 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
       controller?.abort();
       controller = new AbortController();
       const signal = controller.signal;
+      savedRef.current = false;
       setLoaded(false); setLoadFailed(false); onReadyChange?.(false);
       const stored = draftStore.current?.read();
       if (stored) {
@@ -83,7 +89,7 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
         if (recovered) {
           setState(recovered.conflict ? { kind: "conflict", current: note } : { kind: "dirty" });
           if (!recovered.conflict) timer.current = setTimeout(() => void saveNowRef.current(), 800);
-        } else { setState({ kind: "idle" }); onReadyChange?.(true); }
+        } else { savedRef.current = true; setState({ kind: "idle" }); onReadyChange?.(true); }
         setLoaded(true);
       } catch { if (!signal.aborted) setLoadFailed(true); }
     };
@@ -124,7 +130,7 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
   }
 
   saveNowRef.current = async () => {
-    if (conflicted.current) return;
+    if (conflicted.current || composingRef.current) return;
     await saveRevision(latestRef.current.revision);
   };
 
@@ -141,7 +147,8 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
     setUpdatedAt(note.updatedAt);
     onRevision?.(note);
     if (note.markdown === latestRef.current.markdown && note.title === latestRef.current.title) {
-      onReadyChange?.(true);
+      savedRef.current = true;
+      onReadyChange?.(!composingRef.current);
       setState({ kind: "saved", at: Date.now() });
     } else {
       // 保存窗口内又有编辑：立即再存一轮。
@@ -153,6 +160,7 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
   }
 
   function edit(nextTitle: string, nextMarkdown: string) {
+    savedRef.current = false;
     onReadyChange?.(false);
     latestRef.current = { title: nextTitle, markdown: nextMarkdown, revision: latestRef.current.revision };
     setDraftStorageFailed(!draftStore.current?.write(latestRef.current));
@@ -171,6 +179,7 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
     if (state.kind !== "conflict") return;
     conflicted.current = false;
     if (timer.current) clearTimeout(timer.current);
+    savedRef.current = true;
     draftStore.current?.discard();
     onRevision?.(state.current);
     onReadyChange?.(true);
@@ -180,6 +189,16 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
     setUpdatedAt(state.current.updatedAt);
     latestRef.current = { title: state.current.title, markdown: state.current.markdown, revision: state.current.revision };
     setState({ kind: "idle" });
+  }
+
+  function handleComposition(active: boolean) {
+    composingRef.current = active; setComposing(active);
+    if (timer.current) clearTimeout(timer.current);
+    if (active) onReadyChange?.(false);
+    else {
+      onReadyChange?.(savedRef.current);
+      if (!savedRef.current && !conflicted.current) timer.current = setTimeout(() => void saveNowRef.current(), 800);
+    }
   }
 
   const status = (() => {
@@ -194,12 +213,14 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
   })();
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
         <input
           disabled={!loaded}
           value={title}
           onChange={(event) => edit(event.target.value, markdown)}
+          onCompositionStart={() => handleComposition(true)}
+          onCompositionEnd={() => handleComposition(false)}
           aria-label="笔记标题"
           maxLength={240}
           className="min-w-0 flex-1 border-0 bg-transparent font-serif text-xl font-bold text-ink outline-none placeholder:text-ink-3"
@@ -207,11 +228,6 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
         />
         <div className="flex shrink-0 items-center gap-2">
           <Badge variant={loadFailed ? "danger" : !loaded ? "live" : status.tone} size="sm" aria-live="polite">{loadFailed ? "读取失败" : !loaded ? "正在读取最新版…" : status.text}</Badge>
-          {!compact ? (
-            <Button type="button" variant="ghost" size="sm" onClick={() => setPreview((value) => !value)}>
-              {preview ? "编辑" : "预览"}
-            </Button>
-          ) : null}
           {loadFailed ? <Button type="button" variant="secondary" size="sm" onClick={() => void reloadRef.current()}>重新读取</Button> : null}
           {state.kind === "error" ? (
             <Button type="button" variant="secondary" size="sm" onClick={() => void saveNowRef.current()}>重试</Button>
@@ -237,22 +253,8 @@ export function NoteEditor({ initial, onRevision, onReadyChange, compact = false
         </div>
       ) : null}
 
-      {preview && !compact ? (
-        <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-sm border border-line bg-paper px-4 py-3">
-          <Markdown text={markdown || "（空）"} />
-        </div>
-      ) : (
-        <textarea
-          disabled={!loaded}
-          value={markdown}
-          onChange={(event) => edit(title, event.target.value)}
-          aria-label="笔记正文（Markdown）"
-          maxLength={256 * 1024}
-          spellCheck={false}
-          className="mt-3 min-h-0 w-full flex-1 resize-none rounded-sm border border-line bg-paper px-4 py-3 font-mono text-[13px] leading-6 text-ink placeholder:text-ink-3 focus:outline-none focus:ring-1 focus:ring-ink/30"
-          placeholder="用 Markdown 记下想法…"
-        />
-      )}
+      {loaded ? <NoteBodyEditor value={markdown} disabled={!loaded} onChange={(value) => edit(latestRef.current.title, value)} onComposingChange={handleComposition} /> : <div className="mt-4 min-h-0 flex-1 border border-line bg-paper p-6 text-sm text-ink-2" role="status">正在读取笔记…</div>}
+
     </div>
   );
 }
