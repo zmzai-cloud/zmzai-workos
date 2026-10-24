@@ -1,0 +1,24 @@
+<h2>首版范围：只打通一条高频闭环</h2>
+<p class="subtitle">目标是让用户从目标到可用产物全程不丢上下文；不是在首版重造执行引擎。</p>
+
+<div class="mockup">
+  <div class="mockup-header">数据与状态流</div>
+  <div class="mockup-body">
+    <div style="display:flex;align-items:stretch;gap:8px;overflow:auto;padding:12px 0">
+      <div style="min-width:145px;flex:1;padding:14px;border-radius:10px;background:#eff6ff;border:1px solid #bfdbfe"><b>1 · 目标</b><p style="margin-top:7px;font-size:12px;color:#475569">创建目标、选择项目、附加背景资料</p></div>
+      <div style="align-self:center;color:#64748b">→</div>
+      <div style="min-width:145px;flex:1;padding:14px;border-radius:10px;background:#f0fdf4;border:1px solid #bbf7d0"><b>2 · Agent</b><p style="margin-top:7px;font-size:12px;color:#475569">创建执行任务，返回状态、检查点和产物</p></div>
+      <div style="align-self:center;color:#64748b">→</div>
+      <div style="min-width:145px;flex:1;padding:14px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa"><b>3 · 工作台</b><p style="margin-top:7px;font-size:12px;color:#475569">汇总队列；提示确认、失败与预算风险</p></div>
+      <div style="align-self:center;color:#64748b">→</div>
+      <div style="min-width:145px;flex:1;padding:14px;border-radius:10px;background:#faf5ff;border:1px solid #e9d5ff"><b>4 · 结果</b><p style="margin-top:7px;font-size:12px;color:#475569">进入收件箱；可归档为项目知识或继续加工</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="split" style="margin-top:24px">
+  <div class="mockup"><div class="mockup-header">MVP：本期交付</div><div class="mockup-body"><ul style="padding-left:18px;display:grid;gap:10px"><li>目标、项目、状态与任务的关联模型</li><li>工作台内创建 Agent 任务</li><li>进行中／待确认／阻塞／完成的统一队列</li><li>产物收件箱与项目知识归档</li><li>Relay 用量摘要和阈值预警</li><li>任务失败或服务不可达时的明确降级状态</li></ul></div></div>
+  <div class="mockup"><div class="mockup-header">后续：明确不进首版</div><div class="mockup-body"><ul style="padding-left:18px;display:grid;gap:10px"><li>可视化跨 Agent 编排器</li><li>自动发布到第三方渠道</li><li>多人协作与审批流</li><li>自建模型网关或重复 Relay 计费能力</li><li>复杂的知识编辑器</li></ul></div></div>
+</div>
+
+<div class="section" style="margin-top:24px"><p class="label">接口边界</p><p>工作台只保存目标、项目、引用关系与聚合视图；Agent 是任务执行和产物的权威来源；Relay 是用量与账单的权威来源。任何服务暂时不可用时，保留已知数据，并在对应模块标记“暂不可达”，不把它误显示为空。</p></div>

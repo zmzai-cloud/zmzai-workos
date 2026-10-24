@@ -2,22 +2,22 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useChat } from "@ai-sdk/react";
+import { getToolName, isToolUIPart } from "ai";
 
-import { Badge, Button, Card, Icon, Markdown, PermissionCard, type PermissionReply } from "@zmzai/theme";
+import { Badge, Button, Card, Icon, Markdown, PermissionCard, ToolCard, type PermissionReply, type ToolCall } from "@zmzai/theme";
 
-import type { AgentConversationDetail, AgentSessionListItem } from "@/lib/agent-client";
+import type { AgentSessionListItem } from "@/lib/agent-client";
 import type { NoteView } from "@/lib/domain/notes";
 import type { TodoView } from "@/lib/domain/todos";
-import { acceptEvent } from "@/lib/event-sequence";
-import { ConversationRefreshGuard, reconcileConversationDetail } from "@/lib/conversation-refresh";
 import { MemoryStatus } from "@/components/memory-status";
-import { memoryAvailabilityLabel, memoryBankHref } from "@/lib/memory-view";
+import { mergeMemoryReceipt, memoryAvailabilityLabel, memoryBankHref, type MemoryReceipt } from "@/lib/memory-view";
 import { NoteEditor } from "@/components/note-editor";
 import { isDomainUpdate, WorkosApproval } from "@/components/workos-approval";
 import { CloudMascot, type CloudMascotState } from "@/components/cloud-mascot";
+import { createAgentChatTransport, type WorkosChatMessage, type WorkosChatPart, type WorkosPermissionEvent, type WorkosRunStatus } from "@/lib/agent-chat-transport";
 
 export type ConversationOutcomes = { notes: NoteView[]; todos: TodoView[] };
-export type ConversationDetailWithOutcomes = AgentConversationDetail & { outcomes: ConversationOutcomes };
 
 type PendingApproval = {
   id: string;
@@ -28,39 +28,138 @@ type PendingApproval = {
 };
 
 const runLabels: Record<string, string> = { created: "已创建", queued: "已排队", running: "正在回复", waiting_input: "等待输入", waiting_approval: "等待确认", paused: "已暂停", succeeded: "已完成", failed: "运行失败", cancelled: "已取消" };
-const allEventNames = [
-  "memory.recall_succeeded", "memory.recall_unavailable", "memory.recall_disabled",
-  "memory.retention_pending", "memory.retention_succeeded", "memory.retention_skipped", "memory.retention_failed", "memory.retention_unknown", "memory.retention_disabled",
-  "session.status", "session.error", "message.created", "message.updated", "message.part.updated",
-  "message.part.delta", "permission.asked", "permission.replied",
-];
+/** 触发成果区（笔记/待办/交付状态）刷新的侧道事件——不再全量轮询。 */
+const outcomeActivity = new Set(["todo.updated", "task.delivered", "task.failed", "task.cancelled", "artifact.created", "file.edited"]);
 
-export function ConversationView({ initial, memoryOrigin, recentSessions = [] }: { recentSessions?: AgentSessionListItem[]; initial: ConversationDetailWithOutcomes; memoryOrigin: string | null }) {
-  const [detail, setDetail] = useState(initial);
+type LiveToolPart = { toolCallId: string; state: string; input?: unknown; output?: unknown; errorText?: string; title?: string };
+
+function toolCallFromPart(part: LiveToolPart, toolName: string): ToolCall {
+  const tool = toolName;
+  const input = part.input;
+  if (part.state === "output-available") {
+    const output = part.output as { text?: string; title?: string } | undefined;
+    return {
+      id: part.toolCallId,
+      tool,
+      state: {
+        status: "completed",
+        input,
+        output: typeof output?.text === "string" ? output.text : JSON.stringify(output ?? ""),
+        title: output?.title ?? part.title ?? tool,
+        time: { start: "", end: "" },
+      },
+    };
+  }
+  if (part.state === "output-error") {
+    return { id: part.toolCallId, tool, state: { status: "error", input, error: part.errorText ?? "工具执行失败", time: { start: "", end: "" } } };
+  }
+  return { id: part.toolCallId, tool, state: { status: "running", input, ...(part.title ? { title: part.title } : {}), time: { start: "" } } };
+}
+
+function AssistantParts({ parts, idle }: { parts: WorkosChatPart[]; idle: boolean }) {
+  return (
+    <div className="space-y-2">
+      {parts.map((part, index) => {
+        if (part.type === "text") return <Markdown key={`t${index}`} text={part.text} />;
+        if (isToolUIPart(part)) return <ToolCard key={part.toolCallId} call={toolCallFromPart(part, getToolName(part) ?? "tool")} sessionIdle={idle} />;
+        return null; // step-start / step-finish / data-*：结构性或侧道事件，不进正文
+      })}
+    </div>
+  );
+}
+
+export function ConversationView({ recentSessions = [], initial, initialMessages, memoryOrigin }: { recentSessions?: AgentSessionListItem[]; initial: { session: { id: string; title: string; workspaceId: string }; workspaceName?: string; latestRun: { runId: string; sessionId: string; status: string; active: boolean } | null; memory: MemoryReceipt | null; memoryEnabled?: boolean; outcomes: ConversationOutcomes }; initialMessages: WorkosChatMessage[]; memoryOrigin: string | null }) {
+  const sessionId = initial.session.id;
   const [prompt, setPrompt] = useState("");
-  const [sending, setSending] = useState(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
   const [error, setError] = useState("");
-  const [streamText, setStreamText] = useState<{ messageId: string; text: string } | null>(null);
   const [approvals, setApprovals] = useState<Map<string, PendingApproval>>(new Map());
   const [approvalBusy, setApprovalBusy] = useState<string | null>(null);
   const [panelNote, setPanelNote] = useState<NoteView | null>(null);
   const [noteReady, setNoteReady] = useState(true);
   const [todoBusy, setTodoBusy] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [draftLoaded, setDraftLoaded] = useState(false);
   const [newReply, setNewReply] = useState(false);
-  const messagesRef = useRef<HTMLDivElement>(null);
+  /** 页面加载时有活跃 Run：resume 期间保持「正在回复」门控（Chat 侧无先导状态可推导）。 */
+  const [resuming, setResuming] = useState(initial.latestRun?.active === true);
+  const [sideRun, setSideRun] = useState<WorkosRunStatus | null>(null);
+  const [runMeta, setRunMeta] = useState({ latestRun: initial.latestRun, memory: initial.memory });
+  const [outcomes, setOutcomes] = useState<ConversationOutcomes>(initial.outcomes);
+
+  const messagesBox = useRef<HTMLDivElement>(null);
   const approvalsRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
   const scrollRestored = useRef(false);
-  const seen = useRef(new Set<string>());
-  const lastSeq = useRef(0);
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const refreshGuard = useRef<ConversationRefreshGuard | null>(null);
-  if (!refreshGuard.current) refreshGuard.current = new ConversationRefreshGuard(initial.latestRun?.runId ?? null);
-  const sessionId = initial.session.id;
-  const runId = detail.latestRun?.runId;
-  const runActive = detail.latestRun?.active === true;
+  const lastSignature = useRef("");
+  const outcomesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const transportRef = useRef<ReturnType<typeof createAgentChatTransport> | null>(null);
+  if (!transportRef.current) transportRef.current = createAgentChatTransport(sessionId);
+
+  const refreshOutcomes = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/conversations/${encodeURIComponent(sessionId)}`, { cache: "no-store" });
+      if (!response.ok) return;
+      const next = await response.json() as { outcomes: ConversationOutcomes; latestRun: typeof initial.latestRun; memory: typeof initial.memory };
+      setOutcomes(next.outcomes);
+      setRunMeta((previous) => ({ latestRun: next.latestRun, memory: mergeMemoryReceipt(previous.memory, next.memory) }));
+    } catch { /* 静默：下次事件再触发 */ }
+  }, [sessionId]);
+
+  /** 成果区刷新去抖：侧道事件高频到达时合并为一次拉取（替代旧的全量 900ms 轮询）。 */
+  const scheduleOutcomesRefresh = useCallback(() => {
+    if (outcomesTimer.current) return;
+    outcomesTimer.current = setTimeout(() => {
+      outcomesTimer.current = null;
+      void refreshOutcomes();
+    }, 1_200);
+  }, [refreshOutcomes]);
+
+  const chat = useChat({
+    id: sessionId,
+    messages: initialMessages,
+    transport: transportRef.current,
+    throttle: 64,
+    resume: true,
+    onData: (part) => {
+      if (part.type === "data-permission") {
+        const event = part.data as WorkosPermissionEvent;
+        if (event.state === "asked" && event.request?.id) {
+          setApprovals((previous) => new Map(previous).set(event.request!.id, event.request! as PendingApproval));
+        } else if (event.state === "replied" && event.id) {
+          setApprovals((previous) => {
+            const next = new Map(previous);
+            next.delete(event.id!);
+            return next;
+          });
+          scheduleOutcomesRefresh();
+        }
+      } else if (part.type === "data-run") {
+        setSideRun(part.data);
+        if (part.data.status === "idle") setResuming(false);
+      } else if (part.type === "data-activity" && outcomeActivity.has(part.data.type)) {
+        scheduleOutcomesRefresh();
+      }
+    },
+    onFinish: () => {
+      setResuming(false);
+      scheduleOutcomesRefresh();
+    },
+    onError: () => {
+      setResuming(false);
+      const last = chat.messages.at(-1);
+      if (last?.role === "assistant") void chat.resumeStream().catch(() => undefined); // 中断自愈：整段重放续上
+      else if (last?.role === "user") {
+        // 发送失败：把没送出去的用户消息退回输入框
+        setPrompt(last.parts.filter((part): part is { type: "text"; text: string } => part.type === "text").map((part) => part.text).join(""));
+        chat.setMessages(chat.messages.slice(0, -1));
+        setError("发送失败，请稍后重试。内容已放回输入框。");
+      } else setError("连接中断，请刷新页面重试。");
+    },
+  });
+  const { messages, sendMessage, setMessages } = chat;
+
+  const runActive = chat.status === "submitted" || chat.status === "streaming" || resuming;
 
   useEffect(() => {
     try { setPrompt(sessionStorage.getItem(`workos:draft:${sessionId}`) ?? ""); } catch { /* optional browser storage */ }
@@ -70,9 +169,10 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
     if (!draftLoaded) return;
     try { sessionStorage.setItem(`workos:draft:${sessionId}`, prompt); } catch { /* optional browser storage */ }
   }, [draftLoaded, prompt, sessionId]);
-  const messageContent = detail.messages.map((message) => `${message.id}:${message.text}`).join("\n");
+  useEffect(() => () => { if (outcomesTimer.current) clearTimeout(outcomesTimer.current); }, []);
+
   useEffect(() => {
-    const box = messagesRef.current;
+    const box = messagesBox.current;
     if (!box) return;
     if (!scrollRestored.current) {
       scrollRestored.current = true;
@@ -82,120 +182,24 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
       nearBottom.current = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
       return;
     }
+    const last = messages.at(-1);
+    const signature = last ? `${last.id}:${last.parts.length}:${JSON.stringify(last.parts.at(-1) ?? null).length}` : "";
+    if (signature === lastSignature.current) return;
+    lastSignature.current = signature;
     if (nearBottom.current) box.scrollTop = box.scrollHeight;
     else setNewReply(true);
-  }, [messageContent, streamText, sessionId]);
-
-  const refresh = useCallback(async (expectedRunId: string) => {
-    const guard = refreshGuard.current!;
-    const ticket = guard.capture(expectedRunId);
-    if (!guard.isCurrent(ticket)) return;
-    try {
-      const response = await fetch(`/api/conversations/${encodeURIComponent(sessionId)}`, { cache: "no-store" });
-      if (!response.ok) throw new Error("REFRESH_FAILED");
-      const next = await response.json() as ConversationDetailWithOutcomes;
-      setDetail((previous) => {
-        const merged = guard.accept(ticket, next.latestRun?.runId ?? null) ? reconcileConversationDetail(previous, next) : previous;
-        if (merged !== previous && streamTextRef.current && next.messages.some((message) => message.id === streamTextRef.current?.messageId)) {
-          setStreamText(null);
-        }
-        return merged === previous ? previous : { ...merged, outcomes: next.outcomes };
-      });
-    } catch (caught) {
-      if (guard.isCurrent(ticket)) throw caught;
-    }
-  }, [sessionId]);
-  const streamTextRef = useRef(streamText);
-  streamTextRef.current = streamText;
-
-  /** 流式期间限频刷新（delta 高频到达时不打爆详情接口）。 */
-  const scheduleRefresh = useCallback((expectedRunId: string) => {
-    if (refreshTimer.current) return;
-    refreshTimer.current = setTimeout(() => {
-      refreshTimer.current = null;
-      void refresh(expectedRunId).catch(() => setError("状态更新暂时中断，请刷新页面重试。"));
-    }, 900);
-  }, [refresh]);
-
-  useEffect(() => {
-    if (!runId) return;
-    let stopped = false;
-    let source: EventSource | null = null;
-    let retry: ReturnType<typeof setTimeout> | null = null;
-    const connect = () => {
-      if (stopped) return;
-      source = new EventSource(`/api/conversations/${encodeURIComponent(sessionId)}/events?runId=${encodeURIComponent(runId)}&sinceSeq=${lastSeq.current}`);
-      const handle = (event: Event) => {
-        const message = event as MessageEvent<string>;
-        let payload: Record<string, unknown>;
-        try { payload = JSON.parse(message.data) as Record<string, unknown>; } catch { return; }
-        const sequence = Number(payload._seq ?? message.lastEventId);
-        const eventRunId = typeof payload.runId === "string" ? payload.runId : runId;
-        if (!acceptEvent(seen.current, eventRunId, sequence)) return;
-        lastSeq.current = Math.max(lastSeq.current, sequence);
-        if (eventRunId !== runId && message.type !== "session.status") return;
-
-        if (message.type === "message.part.delta") {
-          const messageId = typeof payload.messageId === "string" ? payload.messageId : "";
-          const delta = typeof payload.delta === "string" ? payload.delta : "";
-          if (messageId && delta) {
-            setStreamText((previous) => (previous && previous.messageId === messageId ? { messageId, text: previous.text + delta } : { messageId, text: delta }));
-          }
-          scheduleRefresh(runId);
-          return;
-        }
-        if (message.type === "permission.asked") {
-          const request = payload.request as PendingApproval | undefined;
-          if (request?.id) setApprovals((previous) => new Map(previous).set(request.id, request));
-          return;
-        }
-        if (message.type === "permission.replied") {
-          const id = typeof payload.id === "string" ? payload.id : "";
-          if (id) setApprovals((previous) => {
-            const next = new Map(previous);
-            next.delete(id);
-            return next;
-          });
-          void refresh(runId).catch(() => undefined);
-          return;
-        }
-        if (message.type === "message.updated" || message.type === "message.part.updated" || message.type === "message.created") {
-          scheduleRefresh(runId);
-          return;
-        }
-        void refresh(runId).catch(() => setError("状态更新暂时中断，请刷新页面重试。"));
-      };
-      for (const name of allEventNames) source.addEventListener(name, handle);
-      source.onerror = () => { source?.close(); if (!stopped) retry = setTimeout(connect, 1500); };
-    };
-    connect();
-    return () => { stopped = true; source?.close(); if (retry) clearTimeout(retry); };
-  }, [runId, sessionId, refresh, scheduleRefresh]);
-
-  // 运行结束后清掉残留的流式气泡（快照消息已落库）。
-  useEffect(() => {
-    if (!runActive && streamTextRef.current) {
-      const timer = setTimeout(() => setStreamText(null), 600);
-      return () => clearTimeout(timer);
-    }
-  }, [runActive]);
+  }, [messages]);
 
   async function send(event: React.FormEvent) {
     event.preventDefault();
     const text = prompt.trim();
-    if (!draftLoaded || !text || sending || runActive) return;
-    setSending(true); setError("");
+    if (!draftLoaded || !text || runActive) return;
+    setError("");
+    setPrompt("");
+    setSideRun({ seq: 0, status: "running" });
     try {
-      const response = await fetch(`/api/conversations/${encodeURIComponent(sessionId)}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt: text }) });
-      if (!response.ok) throw new Error("SEND_FAILED");
-      const started = await response.json() as { runId: string; status: string };
-      refreshGuard.current!.transition(started.runId);
-      setPrompt("");
-      setStreamText(null);
-      setDetail((previous) => ({ ...previous, latestRun: { runId: started.runId, sessionId, status: started.status, active: true }, memory: null }));
-      void refresh(started.runId).catch(() => setError("消息已发送，状态暂时无法更新，请刷新页面。"));
-    } catch { setError("发送失败，请稍后重试。内容仍留在输入框中。"); }
-    finally { setSending(false); }
+      await sendMessage({ text });
+    } catch { /* onError 已统一处理 */ }
   }
 
   async function replyApproval(requestId: string, reply: PermissionReply, feedback?: string) {
@@ -212,10 +216,8 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
           next.delete(requestId);
           return next;
         });
-        void refresh(runId ?? "").catch(() => undefined);
-      } else {
-        setError("审批提交失败，请重试。");
-      }
+        void refreshOutcomes();
+      } else setError("审批提交失败，请重试。");
     } catch {
       setError("审批提交失败，请检查网络后重试。");
     } finally {
@@ -235,37 +237,45 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
     if (todoBusy) return;
     setTodoBusy(todo.todoId);
     const nextStatus = todo.status === "done" ? "open" : "done";
-    setDetail((previous) => ({ ...previous, outcomes: { ...previous.outcomes, todos: previous.outcomes.todos.map((item) => (item.todoId === todo.todoId ? { ...item, status: nextStatus } : item)) } }));
+    setOutcomes((previous) => ({ ...previous, todos: previous.todos.map((item) => (item.todoId === todo.todoId ? { ...item, status: nextStatus } : item)) }));
     const response = await fetch(`/api/todos/${encodeURIComponent(todo.todoId)}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ status: nextStatus }),
     }).catch(() => null);
     if (!response || !response.ok) {
-      setDetail((previous) => ({ ...previous, outcomes: { ...previous.outcomes, todos: previous.outcomes.todos.map((item) => (item.todoId === todo.todoId ? { ...item, status: todo.status } : item)) } }));
+      setOutcomes((previous) => ({ ...previous, todos: previous.todos.map((item) => (item.todoId === todo.todoId ? { ...item, status: todo.status } : item)) }));
       setError("待办状态更新失败，请重试。");
     }
     setTodoBusy(null);
   }
 
-  const bankId = detail.session.workspaceId;
-  const memoryAvailability = memoryAvailabilityLabel(detail.memoryEnabled, detail.workspaceName ?? bankId);
+  const bankId = initial.session.workspaceId;
+  const memoryAvailability = memoryAvailabilityLabel(initial.memoryEnabled, initial.workspaceName ?? bankId);
   const bankHref = memoryBankHref(memoryOrigin, bankId);
   const approvalList = useMemo(() => [...approvals.values()], [approvals]);
+
+  const badgeStatus = approvalList.length > 0 || sideRun?.status === "waiting_permission" || runMeta.latestRun?.status === "waiting_approval"
+    ? "waiting_approval"
+    : sideRun?.status === "waiting_input" || runMeta.latestRun?.status === "waiting_input" ? "waiting_input"
+    : runActive ? "running"
+    : sideRun?.status === "failed" ? "failed"
+    : runMeta.latestRun?.status ?? "";
+  const runFailed = badgeStatus === "failed" || (!!sideRun?.error && !runActive);
 
   // 小云状态与真实运行绑定：运行中思考；成功后短暂完成态；其余陪伴。
   const [celebrate, setCelebrate] = useState(false);
   const prevActive = useRef(runActive);
   useEffect(() => {
-    if (prevActive.current && !runActive && detail.latestRun?.status === "succeeded") {
+    if (prevActive.current && !runActive && (runMeta.latestRun?.status === "succeeded" || sideRun?.status === "idle")) {
       setCelebrate(true);
       const timer = setTimeout(() => setCelebrate(false), 2_800);
       prevActive.current = runActive;
       return () => clearTimeout(timer);
     }
     prevActive.current = runActive;
-  }, [runActive, detail.latestRun?.status]);
-  const mascotState: CloudMascotState = approvalList.length || ["waiting_approval", "waiting_input"].includes(detail.latestRun?.status ?? "") ? "waiting" : detail.latestRun?.status === "failed" ? "error" : runActive ? "thinking" : celebrate ? "complete" : "companion";
+  }, [runActive]);
+  const mascotState: CloudMascotState = approvalList.length || badgeStatus === "waiting_approval" || badgeStatus === "waiting_input" ? "waiting" : runFailed ? "error" : runActive ? "thinking" : celebrate ? "complete" : "companion";
 
   return (
     <div className="relative flex h-full min-h-0 flex-col lg:flex-row lg:gap-4">
@@ -278,36 +288,32 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
         <div className="flex items-start justify-between gap-3 shrink-0 border-b border-line pb-3">
           <div className="min-w-0 flex-1">
             <Link href="/conversations" className="text-xs text-ink-2 underline underline-offset-4">← 全部对话</Link>
-            <h1 className="mt-2 truncate font-serif text-2xl font-bold text-ink">{detail.session.title || "对话"}</h1>
-            {detail.workspaceName ? <p className="mt-1 font-mono text-[11px] text-ink-3">{detail.workspaceName}</p> : null}
+            <h1 className="mt-2 truncate font-serif text-2xl font-bold text-ink">{initial.session.title || "对话"}</h1>
+            {initial.workspaceName ? <p className="mt-1 font-mono text-[11px] text-ink-3">{initial.workspaceName}</p> : null}
           </div>
           <div className="flex shrink-0 items-center gap-3">
             <CloudMascot state={mascotState} size={56} />
-            <Badge variant={runActive ? "live" : detail.latestRun?.status === "failed" ? "danger" : "outline"} size="sm" aria-live="polite">
-              {runLabels[detail.latestRun?.status ?? ""] ?? "等待回复"}
+            <Badge variant={runActive ? "live" : runFailed ? "danger" : "outline"} size="sm" aria-live="polite">
+              {runLabels[badgeStatus] ?? "等待回复"}
             </Badge>
           </div>
         </div>
 
-        <div ref={messagesRef} onScroll={(event) => {
+        <div ref={messagesBox} onScroll={(event) => {
           const box = event.currentTarget;
           nearBottom.current = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
           if (nearBottom.current) setNewReply(false);
           try { sessionStorage.setItem(`workos:scroll:${sessionId}`, String(box.scrollTop)); } catch { /* optional storage */ }
         }} className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4 pr-1">
           <ol className="space-y-5" aria-label="对话消息">
-            {detail.messages.map((message) => (
-              <li key={message.id} className={`max-w-[72ch] whitespace-pre-wrap break-words text-sm leading-7 ${message.role === "user" ? "ml-auto border border-line bg-surface px-4 py-3 text-ink" : "text-ink"}`}>
+            {messages.map((message) => (
+              <li key={message.id} className={`max-w-[72ch] break-words text-sm leading-7 ${message.role === "user" ? "ml-auto whitespace-pre-wrap border border-line bg-surface px-4 py-3 text-ink" : "text-ink"}`}>
                 <span className="mb-1 block text-xs font-medium text-ink-3">{message.role === "user" ? "你" : "Agent"}</span>
-                {message.role === "user" ? message.text : <Markdown text={message.text} />}
+                {message.role === "user"
+                  ? message.parts.filter((part): part is { type: "text"; text: string } => part.type === "text").map((part) => part.text).join("")
+                  : <AssistantParts parts={message.parts} idle={!runActive} />}
               </li>
             ))}
-            {streamText && runActive ? (
-              <li className="max-w-[72ch] break-words text-sm leading-7 text-ink" aria-live="polite">
-                <span className="mb-1 block text-xs font-medium text-ink-3">Agent · 正在输入…</span>
-                <Markdown text={streamText.text} />
-              </li>
-            ) : null}
           </ol>
 
           {approvalList.length > 0 ? (
@@ -315,17 +321,17 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
               {approvalList.map((approval) => (
                 <div key={approval.id} className="space-y-2">
                   {isDomainUpdate(approval.permission, approval.metadata) ? (
-                    <WorkosApproval metadata={approval.metadata} contextVersion={detail.outcomes.notes.map((note) => `${note.noteId}:${note.revision}`).join(",") + detail.outcomes.todos.map((todo) => `${todo.todoId}:${todo.updatedAt}`).join(",")} busy={approvalBusy !== null || !noteReady} onReply={(reply) => void replyApproval(approval.id, reply)} onOpenNote={(noteId) => void openNote(noteId)} />
+                    <WorkosApproval metadata={approval.metadata} contextVersion={outcomes.notes.map((note) => `${note.noteId}:${note.revision}`).join(",") + outcomes.todos.map((todo) => `${todo.todoId}:${todo.updatedAt}`).join(",")} busy={approvalBusy !== null || !noteReady} onReply={(reply) => void replyApproval(approval.id, reply)} onOpenNote={(noteId) => void openNote(noteId)} />
                   ) : <PermissionCard request={{ id: approval.id, permission: approval.permission, patterns: approval.patterns, metadata: approval.metadata }} busy={approvalBusy === approval.id} onReply={(reply, feedback) => void replyApproval(approval.id, reply, feedback)} />}
                 </div>
               ))}
             </div>
           ) : null}
 
-          {detail.outcomes.notes.length > 0 || detail.outcomes.todos.length > 0 ? (
+          {outcomes.notes.length > 0 || outcomes.todos.length > 0 ? (
             <div className="mt-6 space-y-3 border-t border-line pt-5" aria-label="本次对话的成果">
               <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-ink-3">已保存的成果</p>
-              {detail.outcomes.notes.map((note) => (
+              {outcomes.notes.map((note) => (
                 <Card key={note.noteId} padding="md" className="transition-colors hover:border-ink/40">
                   <button type="button" className="flex w-full items-center justify-between gap-3 text-left" onClick={() => void openNote(note.noteId)}>
                     <div className="min-w-0">
@@ -336,7 +342,7 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
                   </button>
                 </Card>
               ))}
-              {detail.outcomes.todos.map((todo) => (
+              {outcomes.todos.map((todo) => (
                 <Card key={todo.todoId} padding="md">
                   <div className="flex items-center gap-3">
                     <input
@@ -359,11 +365,11 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
           ) : null}
 
           <div className="mt-6">
-            <MemoryStatus receipt={detail.memory} href={bankHref} />
+            <MemoryStatus receipt={runMeta.memory} href={bankHref} />
           </div>
         </div>
 
-        {newReply ? <button type="button" className="my-2 self-center border border-line bg-paper px-3 py-1 text-xs" onClick={() => { const box = messagesRef.current; if (box) box.scrollTop = box.scrollHeight; nearBottom.current = true; setNewReply(false); }}>有新回复 · 跳到最新</button> : null}
+        {newReply ? <button type="button" className="my-2 self-center border border-line bg-paper px-3 py-1 text-xs" onClick={() => { const box = messagesBox.current; if (box) box.scrollTop = box.scrollHeight; nearBottom.current = true; setNewReply(false); }}>有新回复 · 跳到最新</button> : null}
         {approvalList.length > 0 ? <Button type="button" variant="secondary" size="sm" className="my-2 self-start" aria-controls="pending-approvals" onClick={() => {
           approvalsRef.current?.scrollIntoView({ block: "start" });
           approvalsRef.current?.focus({ preventScroll: true });
@@ -371,10 +377,10 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
         <form onSubmit={send} className="shrink-0 border-t border-line pt-3 pb-[env(safe-area-inset-bottom)]">
           <label htmlFor="message" className="block text-sm font-medium text-ink">继续对话</label>
           <p className="mt-1 text-xs text-ink-3" role="status">{memoryAvailability}</p>
-          <textarea id="message" value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={2} maxLength={32768} placeholder="写下下一条消息…" disabled={!draftLoaded || sending || runActive} className="mt-3 w-full resize-none border border-line bg-paper px-3 py-3 text-sm text-ink placeholder:text-ink-3 disabled:opacity-60" />
-          {error ? <p role="alert" className="mt-2 text-sm text-red-700">{error}</p> : null}
+          <textarea id="message" value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={2} maxLength={32768} placeholder="写下下一条消息…" disabled={!draftLoaded || runActive} className="mt-3 w-full resize-none border border-line bg-paper px-3 py-3 text-sm text-ink placeholder:text-ink-3 disabled:opacity-60" />
+          {error || sideRun?.error ? <p role="alert" className="mt-2 text-sm text-red-700">{error || `运行出错：${sideRun?.error?.message ?? ""}`}</p> : null}
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <Button type="submit" disabled={!draftLoaded || sending || runActive || !prompt.trim()}>{sending ? "发送中…" : "发送消息"}</Button>
+            <Button type="submit" disabled={!draftLoaded || runActive || !prompt.trim()}>{chat.status === "submitted" ? "发送中…" : "发送消息"}</Button>
             {runActive ? <span className="text-xs text-ink-3">当前回复结束后可以继续发送。</span> : null}
           </div>
         </form>
@@ -393,7 +399,7 @@ export function ConversationView({ initial, memoryOrigin, recentSessions = [] }:
           <div className="min-h-0 flex-1">
             <NoteEditor key={panelNote.noteId} compact initial={panelNote} onReadyChange={setNoteReady} onRevision={(note) => {
               setPanelNote(note);
-              setDetail((previous) => ({ ...previous, outcomes: { ...previous.outcomes, notes: previous.outcomes.notes.map((item) => item.noteId === note.noteId ? note : item) } }));
+              setOutcomes((previous) => ({ ...previous, notes: previous.notes.map((item) => item.noteId === note.noteId ? note : item) }));
             }} />
           </div>
         </aside>

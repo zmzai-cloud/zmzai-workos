@@ -1,0 +1,37 @@
+<h2>把“推进队列”改成创作工作台</h2>
+<p class="subtitle">不再用粗黑横线切列表；任务围绕目标与下一步组织，状态只做克制提示。</p>
+
+<div class="cards">
+  <div class="card" data-choice="creative-queue" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:22px;background:#fff;color:#18181b;text-align:left">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
+        <div><div style="font:10px ui-monospace;color:#878791;letter-spacing:.14em;text-transform:uppercase">今日工作</div><div style="font:700 21px Georgia,serif;margin-top:5px">正在推进</div></div>
+        <div style="font:11px ui-monospace;color:#707079;border:1px solid #e4e4e7;padding:6px 8px;border-radius:4px">全部工作 · 7</div>
+      </div>
+      <div style="background:#fafafa;border:1px solid #e8e8ec;border-radius:8px;padding:14px 15px;margin-bottom:9px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="width:7px;height:7px;background:#26834a;border-radius:50%"></span><span style="font-size:11px;color:#27733f">研究中</span><span style="margin-left:auto;font-size:11px;color:#92929b">刚刚更新</span></div>
+        <div style="font-size:15px;font-weight:600;margin-top:9px">比较 Agent 的可观测性方案</div>
+        <div style="font-size:12px;color:#6b6b74;margin-top:6px">下一步：等待 3 个子任务返回研究结论</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+        <div style="border:1px solid #e8e8ec;border-radius:8px;padding:13px"><div style="font-size:11px;color:#b17018">需要你确认</div><div style="font-size:13px;font-weight:600;margin-top:7px">发布新教程</div><div style="font-size:11px;color:#777780;margin-top:5px">选择最终标题</div></div>
+        <div style="border:1px solid #e8e8ec;border-radius:8px;padding:13px"><div style="font-size:11px;color:#777780">最近完成</div><div style="font-size:13px;font-weight:600;margin-top:7px">销售数据看板</div><div style="font-size:11px;color:#777780;margin-top:5px">2 份产物可查看</div></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>B · 创作工作台（推荐）</h3><p>首个任务是一张有上下文的主卡；待确认与最近完成以紧凑次级卡补充。用浅边框与留白组织节奏。</p></div>
+  </div>
+  <div class="card" data-choice="soft-list" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:22px;background:#fff;color:#18181b;text-align:left">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:17px"><div><div style="font:10px ui-monospace;color:#878791;letter-spacing:.14em;text-transform:uppercase">今日工作</div><div style="font:700 21px Georgia,serif;margin-top:5px">任务流</div></div><div style="font-size:11px;color:#71717a">7 项</div></div>
+      <div style="display:grid;gap:2px;border:1px solid #e8e8ec;border-radius:8px;overflow:hidden">
+        <div style="padding:13px 14px;background:#fafafa"><span style="color:#26834a;font-size:11px">● 进行中</span><div style="font-size:14px;font-weight:600;margin-top:5px">比较 Agent 的可观测性方案</div><div style="font-size:11px;color:#777780;margin-top:4px">等待研究结论 · 刚刚更新</div></div>
+        <div style="padding:13px 14px;border-top:1px solid #e8e8ec"><span style="color:#b17018;font-size:11px">● 等你确认</span><div style="font-size:14px;font-weight:600;margin-top:5px">发布新教程</div></div>
+        <div style="padding:13px 14px;border-top:1px solid #e8e8ec"><span style="color:#777780;font-size:11px">○ 已完成</span><div style="font-size:14px;font-weight:600;margin-top:5px">销售数据看板</div></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A · 轻量任务流</h3><p>保留列表效率，但改用浅灰分隔、状态文字和次级信息；密度高，情绪更克制。</p></div>
+  </div>
+</div>
+
+<p class="label" style="margin-top:24px">共同调整</p>
+<p>右侧“项目知识”和“项目”不再单列成等权空卡，而是收进同一条上下文侧栏：有数据时出现，无数据时不抢占视觉注意力。</p>

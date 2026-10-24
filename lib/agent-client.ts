@@ -107,10 +107,17 @@ export async function createAgentTask(input: CreateAgentTaskInput): Promise<{ ta
 }
 
 export type ConversationWorkspace = { workspaceId: string; name: string; memoryEnabled?: boolean };
+/** 详情接口的 part 投影（agent 侧裁剪：reasoning 不出、工具只带状态摘要）。 */
+export type AgentConversationPart =
+  | { type: "text"; id: string; text: string }
+  | { type: "tool"; id: string; callId: string; tool: string; state: { status: string; title?: string; error?: string } }
+  | { type: "step-start"; id: string }
+  | { type: "step-finish"; id: string; tokens?: { input: number; output: number; cacheRead?: number; cacheWrite?: number } }
+  | { type: "subtask"; id: string; prompt: string; description: string; agent: string; childSessionId: string };
 export type AgentConversationDetail = {
   session: { id: string; title: string; workspaceId: string };
   workspaceName?: string;
-  messages: Array<{ id: string; role: string; text: string; createdAt: number }>;
+  messages: Array<{ id: string; role: string; text: string; createdAt: number; parts?: AgentConversationPart[] }>;
   latestRun: { runId: string; sessionId: string; status: string; active: boolean } | null;
   memory: MemoryReceipt | null;
   memoryEnabled?: boolean;
@@ -188,8 +195,8 @@ export async function sendAgentConversationMessage(userId: string, sessionId: st
   return (await agentRequest(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ userId, prompt }) })).json();
 }
 
-export async function fetchAgentEventStream(userId: string, runId: string, sinceSeq: number, signal: AbortSignal): Promise<Response> {
-  const path = identityPath(`/api/internal/workos/runs/${encodeURIComponent(runId)}/events?sinceSeq=${sinceSeq}`, userId);
+export async function fetchAgentEventStream(userId: string, runId: string, sinceSeq: number, signal: AbortSignal, options: { fromRunStart?: boolean } = {}): Promise<Response> {
+  const path = identityPath(`/api/internal/workos/runs/${encodeURIComponent(runId)}/events?sinceSeq=${sinceSeq}${options.fromRunStart ? "&fromRunStart=1" : ""}`, userId);
   const env = getServerEnvironment();
   if (!env) throw new AgentRequestError(503);
   const controller = new AbortController();

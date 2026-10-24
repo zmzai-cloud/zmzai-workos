@@ -1,0 +1,37 @@
+<h2>首版工作台：你要从哪里开始？</h2>
+<p class="subtitle">推荐将“新目标”和“继续推进”放在第一屏，让用户进来立刻行动。</p>
+
+<div class="cards">
+  <div class="card" data-choice="goal-first" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px;background:#f8fafc;color:#18212f;text-align:left">
+      <div style="font-size:11px;color:#6b7280;margin-bottom:16px">ZMZAI · 我的工作</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+        <div style="flex:1;border:1px solid #d7dee8;background:#fff;border-radius:7px;padding:9px;color:#64748b;font-size:12px">描述你要完成的目标…</div>
+        <div style="background:#14213d;color:#fff;border-radius:7px;padding:9px 11px;font-size:12px">开始</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:9px">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px">
+          <b style="font-size:12px">正在推进</b><span style="float:right;color:#0f766e;font-size:10px">3 个任务</span>
+          <div style="margin-top:10px;border-left:3px solid #2563eb;padding-left:7px;font-size:11px">整理 AI 产品研究<br><span style="color:#64748b">资料收集 · 进行中</span></div>
+          <div style="margin-top:9px;border-left:3px solid #cbd5e1;padding-left:7px;font-size:11px">发布新教程<br><span style="color:#64748b">等待你的确认</span></div>
+        </div>
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:11px"><b>需要关注</b><div style="margin-top:10px;color:#b45309">1 项预算提醒</div><div style="margin-top:8px;color:#475569">2 份新产物</div></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A · 目标优先（推荐）</h3><p>新目标、进行中的工作与需处理事项构成第一屏；资产和产品能力退居上下文。</p></div>
+  </div>
+  <div class="card" data-choice="overview-first" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px;background:#f8fafc;color:#18212f;text-align:left">
+      <div style="font-size:11px;color:#6b7280;margin-bottom:16px">ZMZAI · 总览</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:13px">
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;font-size:10px">任务<br><b style="font-size:19px">12</b></div>
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;font-size:10px">产物<br><b style="font-size:19px">38</b></div>
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;font-size:10px">本月消耗<br><b style="font-size:15px">¥128</b></div>
+      </div>
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:11px"><b>近期活动</b><div style="margin-top:10px;color:#64748b">研究任务完成 · 10 分钟前</div><div style="margin-top:8px;color:#64748b">Relay 用量已更新 · 1 小时前</div></div>
+    </div>
+    <div class="card-body"><h3>B · 总览优先</h3><p>先呈现数量、成本与动态，适合管理场景，但用户需多一步才进入实际工作。</p></div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:28px"><p class="label">选 A 后的页面结构</p><div class="mockup"><div class="mockup-header">今日工作</div><div class="mockup-body"><div style="display:grid;gap:10px"><div><b>1. 目标输入</b> — 将意图提交给 Agent</div><div><b>2. 推进队列</b> — 运行、等待确认、失败/阻塞</div><div><b>3. 结果收件箱</b> — 可阅读、下载或继续加工的产物</div><div><b>4. 侧栏上下文</b> — 项目、知识、预算与产品入口</div></div></div></div></div>

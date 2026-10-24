@@ -9,9 +9,8 @@ vi.mock("@/lib/domain/notes", () => ({ listNotes: async () => [], getNote: vi.fn
 vi.mock("@/lib/domain/todos", () => ({ listTodos: async () => [], getTodo: vi.fn(), createTodo: vi.fn(), updateTodo: vi.fn() }));
 
 import { GET as readConversation } from "@/app/api/conversations/[sessionId]/route";
-import { GET as readEvents } from "@/app/api/conversations/[sessionId]/events/route";
-import { ConversationRefreshGuard, reconcileConversationDetail } from "./conversation-refresh";
-import { acceptEvent } from "./event-sequence";
+import { GET as readStream } from "@/app/api/conversations/[sessionId]/stream/route";
+import { mergeMemoryReceipt } from "./memory-view";
 import { memoryView } from "./memory-view";
 import type { AgentConversationDetail } from "./agent-client";
 
@@ -22,14 +21,14 @@ const sessionId = "ses_a";
 const runId = "run_a2";
 const context = { params: Promise.resolve({ sessionId }) };
 
-function agentDetail(retention: "pending" | "unknown", updatedAt: string): AgentConversationDetail {
+function agentDetail(retention: string, updatedAt: string, active = false): AgentConversationDetail {
   return {
     session: { id: sessionId, title: "Release rehearsal", workspaceId: "ws_a" },
     messages: [
       { id: "msg_1", role: "user", text: "How should this be released?", createdAt: 1 },
       { id: "msg_2", role: "assistant", text: "Use staging first.", createdAt: 2 },
     ],
-    latestRun: { runId, sessionId, status: "succeeded", active: false },
+    latestRun: { runId, sessionId, status: active ? "running" : "succeeded", active },
     memory: {
       runId, bankId: "ws_a",
       recall: { status: "hit", hits: [{ memoryId: "mem_a", text: fact }], observedAt: "2026-10-09T10:00:00.000Z" },
@@ -42,7 +41,7 @@ let upstream = agentDetail("pending", "2026-10-09T10:00:01.000Z");
 beforeEach(() => {
   fixture.userId = ownerA;
   fixture.calls.length = 0;
-  upstream = agentDetail("pending", "2026-10-09T10:00:01.000Z");
+  upstream = agentDetail("pending", "2026-10-09T10:00:01.000Z", true);
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = new URL(String(input));
     fixture.calls.push({ url, init });
@@ -74,43 +73,43 @@ describe("Agent → WorkOS memory contract", () => {
     expect(view.hits).toEqual([{ memoryId: "mem_a", text: fact }]);
   });
 
-  it("replays a retained-state SSE event, refreshes to unknown, and ignores a late pending snapshot", async () => {
-    const first = await (await readConversation(new Request(`https://workos.test/api/conversations/${sessionId}`), context)).json() as AgentConversationDetail;
-    const eventResponse = await readEvents(new Request(`https://workos.test/api/conversations/${sessionId}/events?runId=${runId}&sinceSeq=42`), context);
-    expect(eventResponse.status).toBe(200);
-    expect(eventResponse.headers.get("cache-control")).toBe("no-store");
-    const stream = await eventResponse.text();
-    expect(stream).toContain("id: 43\nevent: memory.retention_unknown");
+  it("活跃 Run 经 stream 路由以 fromRunStart 重放，记忆事件以 transient data part 透传，刷新后 unknown 不被迟到的 pending 覆盖", async () => {
+    const response = await readStream(new Request(`https://workos.test/api/conversations/${sessionId}/stream`), context);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const body = await response.text();
+    const memoryChunk = body.split("\n\n").filter((block) => block.includes('"data-memory"'))[0];
+    expect(memoryChunk).toContain('"kind":"retention_unknown"');
+    expect(memoryChunk).toContain('"transient":true');
     const streamCall = fixture.calls.at(-1)!;
     expect(streamCall.url.pathname).toBe(`/api/internal/workos/runs/${runId}/events`);
     expect(streamCall.url.searchParams.get("userId")).toBe(ownerA);
-    expect(streamCall.url.searchParams.get("sinceSeq")).toBe("42");
-    const event = JSON.parse(stream.match(/data: ([^\n]+)/)![1]) as { runId: string; _seq: number };
-    const seen = new Set<string>();
-    expect(acceptEvent(seen, event.runId, event._seq)).toBe(true);
-    expect(acceptEvent(seen, event.runId, event._seq)).toBe(false);
+    expect(streamCall.url.searchParams.get("fromRunStart")).toBe("1");
 
     upstream = agentDetail("unknown", "2026-10-09T10:00:11.000Z");
     const refreshed = await (await readConversation(new Request(`https://workos.test/api/conversations/${sessionId}`), context)).json() as AgentConversationDetail;
-    const guard = new ConversationRefreshGuard(runId);
-    const ticket = guard.capture(runId);
-    const settled = guard.accept(ticket, refreshed.latestRun?.runId ?? null) ? reconcileConversationDetail(first, refreshed) : first;
-    expect(settled.memory?.retention.status).toBe("unknown");
-    expect(memoryView(settled.memory).retentionLabel).toBe("记忆整理状态待确认");
-    const latePending = agentDetail("pending", "2026-10-09T10:00:01.000Z");
-    const afterLate = reconcileConversationDetail(settled, latePending);
-    expect(afterLate.memory?.retention.status).toBe("unknown");
-    expect(afterLate.memory?.recall.hits[0].text).toBe(fact);
+    const settled = mergeMemoryReceipt(upstream.memory, refreshed.memory);
+    expect(settled?.retention.status).toBe("unknown");
+    expect(memoryView(settled).retentionLabel).toBe("记忆整理状态待确认");
+    const latePending = mergeMemoryReceipt(settled, agentDetail("pending", "2026-10-09T10:00:01.000Z").memory);
+    expect(latePending?.retention.status).toBe("unknown");
+    expect(latePending?.recall.hits[0].text).toBe(fact);
+  });
+
+  it("无活跃 Run 时 stream 路由返回 204（Chat 安静回到 ready）", async () => {
+    upstream = agentDetail("succeeded", "2026-10-09T10:00:01.000Z", false);
+    const response = await readStream(new Request(`https://workos.test/api/conversations/${sessionId}/stream`), context);
+    expect(response.status).toBe(204);
+    expect(fixture.calls.every((call) => !call.url.pathname.includes("/runs/"))).toBe(true);
   });
 
   it("does not request or expose A's session or events under owner B", async () => {
     fixture.userId = ownerB;
     const detailResponse = await readConversation(new Request(`https://workos.test/api/conversations/${sessionId}?userId=${ownerA}`), context);
     expect(detailResponse.status).toBe(404);
-    const eventResponse = await readEvents(new Request(`https://workos.test/api/conversations/${sessionId}/events?runId=${runId}&sinceSeq=42`), context);
-    expect(eventResponse.status).toBe(404);
-    expect(fixture.calls.every(call => call.url.searchParams.get("userId") === ownerB)).toBe(true);
-    expect(fixture.calls.every(call => !call.url.pathname.includes("/runs/"))).toBe(true);
-    expect(await eventResponse.text()).not.toContain(fact);
+    const streamResponse = await readStream(new Request(`https://workos.test/api/conversations/${sessionId}/stream`), context);
+    expect(streamResponse.status).toBe(404);
+    expect(fixture.calls.every((call) => call.url.searchParams.get("userId") === ownerB)).toBe(true);
+    expect(fixture.calls.every((call) => !call.url.pathname.includes("/runs/"))).toBe(true);
   });
 });

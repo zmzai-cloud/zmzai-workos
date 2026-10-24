@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/react": "^4.0.156",
     "@tiptap/core": "3.31.4",
     "@tiptap/extension-image": "3.31.4",
     "@tiptap/extension-table": "3.31.4",
@@ -23,6 +24,7 @@
     "@tiptap/starter-kit": "3.31.4",
     "@zmzai/db": "^0.1.0",
     "@zmzai/theme": "^0.9.10",
+    "ai": "^7.0.152",
     "marked": "17.0.1",
     "mongodb": "^7.5.0",
     "mongoose": "^9.9.1",
