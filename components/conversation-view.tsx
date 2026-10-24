@@ -16,6 +16,7 @@ import { NoteEditor } from "@/components/note-editor";
 import { isDomainUpdate, WorkosApproval } from "@/components/workos-approval";
 import { CloudMascot, type CloudMascotState } from "@/components/cloud-mascot";
 import { createAgentChatTransport, type WorkosChatMessage, type WorkosChatPart, type WorkosPermissionEvent, type WorkosRunStatus } from "@/lib/agent-chat-transport";
+import { conversationPartsToUIMessageParts } from "@/lib/conversation-history";
 
 export type ConversationOutcomes = { notes: NoteView[]; todos: TodoView[] };
 
@@ -95,14 +96,25 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
 
   const transportRef = useRef<ReturnType<typeof createAgentChatTransport> | null>(null);
   if (!transportRef.current) transportRef.current = createAgentChatTransport(sessionId);
+  const messagesRef = useRef<WorkosChatMessage[]>(initialMessages);
 
   const refreshOutcomes = useCallback(async () => {
     try {
       const response = await fetch(`/api/conversations/${encodeURIComponent(sessionId)}`, { cache: "no-store" });
       if (!response.ok) return;
-      const next = await response.json() as { outcomes: ConversationOutcomes; latestRun: typeof initial.latestRun; memory: typeof initial.memory };
+      const next = await response.json() as { outcomes: ConversationOutcomes; latestRun: typeof initial.latestRun; memory: typeof initial.memory; messages?: Array<{ id: string; role: string; parts?: Parameters<typeof conversationPartsToUIMessageParts>[0] }> };
       setOutcomes(next.outcomes);
       setRunMeta((previous) => ({ latestRun: next.latestRun, memory: mergeMemoryReceipt(previous.memory, next.memory) }));
+      // 新对话竞态自愈：dashboard 跳转时用户消息可能还没落库（初始历史为空），
+      // resume 重放又只折 assistant——这里把落库后的用户气泡补回到最前。
+      const current = messagesRef.current;
+      if (next.messages && current.length > 0 && current[0]!.role === "assistant" && current[0]!.id.startsWith("run_")) {
+        const missing = next.messages.filter((message) => message.role === "user" && !current.some((local) => local.id === message.id));
+        if (missing.length > 0) setMessages([
+          ...missing.map((message) => ({ id: message.id, role: "user" as const, parts: conversationPartsToUIMessageParts(message.parts ?? []) })),
+          ...current,
+        ]);
+      }
     } catch { /* 静默：下次事件再触发 */ }
   }, [sessionId]);
 
@@ -158,6 +170,7 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
     },
   });
   const { messages, sendMessage, setMessages } = chat;
+  messagesRef.current = messages;
 
   const runActive = chat.status === "submitted" || chat.status === "streaming" || resuming;
 
@@ -260,6 +273,9 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
     : sideRun?.status === "waiting_input" || runMeta.latestRun?.status === "waiting_input" ? "waiting_input"
     : runActive ? "running"
     : sideRun?.status === "failed" ? "failed"
+    // 流里看到的 idle 是本次 Run 的权威终态；latestRun 投影可能滞后（仍是
+    // created/queued），未终态时按已完成显示，落库后自然纠正。
+    : sideRun?.status === "idle" ? (["succeeded", "failed", "cancelled"].includes(runMeta.latestRun?.status ?? "") ? runMeta.latestRun?.status! : "succeeded")
     : runMeta.latestRun?.status ?? "";
   const runFailed = badgeStatus === "failed" || (!!sideRun?.error && !runActive);
 
