@@ -93,6 +93,11 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
   const scrollRestored = useRef(false);
   const lastSignature = useRef("");
   const outcomesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 断线自愈的指数退避状态：连续失败按 1s→2s→…→30s 重试，达上限改提示刷新；
+   *  收到任何流数据即归零（连接恢复）。没有退避的话，服务不可达时
+   *  onError→resumeStream 会形成无间隔的请求风暴。 */
+  const resumeAttempts = useRef(0);
+  const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const transportRef = useRef<ReturnType<typeof createAgentChatTransport> | null>(null);
   if (!transportRef.current) transportRef.current = createAgentChatTransport(sessionId);
@@ -147,6 +152,7 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
           scheduleOutcomesRefresh();
         }
       } else if (part.type === "data-run") {
+        resumeAttempts.current = 0;
         setSideRun(part.data);
         if (part.data.status === "idle") setResuming(false);
       } else if (part.type === "data-activity" && outcomeActivity.has(part.data.type)) {
@@ -160,8 +166,14 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
     onError: () => {
       setResuming(false);
       const last = chat.messages.at(-1);
-      if (last?.role === "assistant") void chat.resumeStream().catch(() => undefined); // 中断自愈：整段重放续上
-      else if (last?.role === "user") {
+      if (last?.role === "assistant") {
+        // 中断自愈：整段重放续上（带指数退避与上限，防服务不可达时打转）
+        const attempt = resumeAttempts.current + 1;
+        if (attempt > 6) { setError("连接中断，自动重连未成功，请稍后刷新页面重试。"); return; }
+        resumeAttempts.current = attempt;
+        if (resumeTimer.current) clearTimeout(resumeTimer.current);
+        resumeTimer.current = setTimeout(() => { void chat.resumeStream().catch(() => undefined); }, Math.min(1000 * 2 ** (attempt - 1), 30_000));
+      } else if (last?.role === "user") {
         // 发送失败：把没送出去的用户消息退回输入框
         setPrompt(last.parts.filter((part): part is { type: "text"; text: string } => part.type === "text").map((part) => part.text).join(""));
         chat.setMessages(chat.messages.slice(0, -1));
@@ -182,7 +194,10 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
     if (!draftLoaded) return;
     try { sessionStorage.setItem(`workos:draft:${sessionId}`, prompt); } catch { /* optional browser storage */ }
   }, [draftLoaded, prompt, sessionId]);
-  useEffect(() => () => { if (outcomesTimer.current) clearTimeout(outcomesTimer.current); }, []);
+  useEffect(() => () => {
+    if (outcomesTimer.current) clearTimeout(outcomesTimer.current);
+    if (resumeTimer.current) clearTimeout(resumeTimer.current);
+  }, []);
 
   useEffect(() => {
     const box = messagesBox.current;
