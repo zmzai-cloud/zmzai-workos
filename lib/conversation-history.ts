@@ -1,8 +1,16 @@
 import type { AgentConversationDetail, AgentConversationPart } from "./agent-client";
 import type { WorkosChatMessage, WorkosChatPart } from "./agent-chat-transport";
 
-/** 历史 → UIMessage：文本/工具折叠成与直播一致的部分（工具只有状态摘要，
- *  与 agent 详情接口的裁剪对齐；reasoning 依隐私边界不出）。
+/** 历史 → UIMessage：**按轮分组**——一轮用户消息到下一条用户消息之间的所有
+ *  assistant 消息（framework 的 agent-loop 每个工具间隔都是独立消息）合并为
+ *  一条 UIMessage，parts 顺序拼接。直播时一轮 Run 由适配器折成一条消息
+ *  （run_<runId>），历史若按消息粒度逐条显示，刷新前后同一轮会呈现两种
+ *  结构（一条连续回复 vs 一串碎气泡）——观感即「消息流错乱」。分组后两种
+ *  路径结构一致；合并消息的 id 取轮内首条 assistant 消息 id（稳定且不与
+ *  直播消息 run_<runId> 冲突）。
+ *
+ *  文本/工具折叠与直播一致（工具只有状态摘要，与 agent 详情接口的裁剪对齐；
+ *  reasoning 依隐私边界不出）。
  *
  *  活跃 Run 期间加载：历史里已有本 Run 的半截 assistant 消息（store 里的
  *  checkpoint 态），而 resume 会把整个 Run 重放成一条新消息——保留半截就会出现
@@ -14,12 +22,24 @@ export function toInitialMessages(detail: AgentConversationDetail): WorkosChatMe
     role: message.role === "user" ? ("user" as const) : ("assistant" as const),
     parts: conversationPartsToUIMessageParts(message.parts ?? (message.text ? [{ id: `${message.id}:t`, type: "text" as const, text: message.text }] : [])),
   }));
-  if (detail.latestRun?.active !== true || history.length === 0) return history;
-  let lastUserIndex = -1;
-  for (let index = history.length - 1; index >= 0; index--) {
-    if (history[index]!.role === "user") { lastUserIndex = index; break; }
+
+  // —— 轮分组：user 开新轮；同轮 assistant 依序并入前一条 ——
+  const grouped: WorkosChatMessage[] = [];
+  for (const message of history) {
+    const previous = grouped.at(-1);
+    if (message.role === "assistant" && previous?.role === "assistant") {
+      previous.parts.push(...message.parts);
+      continue;
+    }
+    grouped.push({ ...message, parts: [...message.parts] });
   }
-  return lastUserIndex === -1 ? history : history.slice(0, lastUserIndex + 1);
+
+  if (detail.latestRun?.active !== true || grouped.length === 0) return grouped;
+  let lastUserIndex = -1;
+  for (let index = grouped.length - 1; index >= 0; index--) {
+    if (grouped[index]!.role === "user") { lastUserIndex = index; break; }
+  }
+  return lastUserIndex === -1 ? grouped : grouped.slice(0, lastUserIndex + 1);
 }
 
 export function conversationPartsToUIMessageParts(parts: AgentConversationPart[]): WorkosChatPart[] {
