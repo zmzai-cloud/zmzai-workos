@@ -16,7 +16,7 @@ import { NoteEditor } from "@/components/note-editor";
 import { isDomainUpdate, WorkosApproval } from "@/components/workos-approval";
 import { CloudMascot, type CloudMascotState } from "@/components/cloud-mascot";
 import { createAgentChatTransport, type WorkosChatMessage, type WorkosChatPart, type WorkosPermissionEvent, type WorkosRunStatus } from "@/lib/agent-chat-transport";
-import { conversationPartsToUIMessageParts } from "@/lib/conversation-history";
+import { conversationPartsToUIMessageParts, preserveReplaySnapshot } from "@/lib/conversation-history";
 
 export type ConversationOutcomes = { notes: NoteView[]; todos: TodoView[] };
 
@@ -83,6 +83,7 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
   const [newReply, setNewReply] = useState(false);
   /** 页面加载时有活跃 Run：resume 期间保持「正在回复」门控（Chat 侧无先导状态可推导）。 */
   const [resuming, setResuming] = useState(initial.latestRun?.active === true);
+  const [replaySnapshot, setReplaySnapshot] = useState<WorkosChatMessage | null>(null);
   const [sideRun, setSideRun] = useState<WorkosRunStatus | null>(null);
   const [runMeta, setRunMeta] = useState({ latestRun: initial.latestRun, memory: initial.memory });
   const [outcomes, setOutcomes] = useState<ConversationOutcomes>(initial.outcomes);
@@ -161,28 +162,35 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
     },
     onFinish: () => {
       setResuming(false);
+      setReplaySnapshot(null);
       scheduleOutcomesRefresh();
     },
     onError: () => {
-      setResuming(false);
       const last = chat.messages.at(-1);
       if (last?.role === "assistant") {
         // 中断自愈：整段重放续上（带指数退避与上限，防服务不可达时打转）
         const attempt = resumeAttempts.current + 1;
-        if (attempt > 6) { setError("连接中断，自动重连未成功，请稍后刷新页面重试。"); return; }
+        if (attempt > 6) { setResuming(false); setError("连接中断，自动重连未成功，请稍后刷新页面重试。"); return; }
+        setResuming(true);
+        setReplaySnapshot((current) => current ?? last);
         resumeAttempts.current = attempt;
         if (resumeTimer.current) clearTimeout(resumeTimer.current);
         resumeTimer.current = setTimeout(() => { void chat.resumeStream().catch(() => undefined); }, Math.min(1000 * 2 ** (attempt - 1), 30_000));
       } else if (last?.role === "user") {
+        setResuming(false);
         // 发送失败：把没送出去的用户消息退回输入框
         setPrompt(last.parts.filter((part): part is { type: "text"; text: string } => part.type === "text").map((part) => part.text).join(""));
         chat.setMessages(chat.messages.slice(0, -1));
         setError("发送失败，请稍后重试。内容已放回输入框。");
-      } else setError("连接中断，请刷新页面重试。");
+      } else {
+        setResuming(false);
+        setError("连接中断，请刷新页面重试。");
+      }
     },
   });
   const { messages, sendMessage, setMessages } = chat;
   messagesRef.current = messages;
+  const displayedMessages = preserveReplaySnapshot(messages, replaySnapshot);
 
   const runActive = chat.status === "submitted" || chat.status === "streaming" || resuming;
 
@@ -210,13 +218,13 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
       nearBottom.current = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
       return;
     }
-    const last = messages.at(-1);
+    const last = displayedMessages.at(-1);
     const signature = last ? `${last.id}:${last.parts.length}:${JSON.stringify(last.parts.at(-1) ?? null).length}` : "";
     if (signature === lastSignature.current) return;
     lastSignature.current = signature;
     if (nearBottom.current) box.scrollTop = box.scrollHeight;
     else setNewReply(true);
-  }, [messages]);
+  }, [displayedMessages]);
 
   async function send(event: React.FormEvent) {
     event.preventDefault();
@@ -224,6 +232,7 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
     if (!draftLoaded || !text || runActive) return;
     setError("");
     setPrompt("");
+    setReplaySnapshot(null);
     setSideRun({ seq: 0, status: "running" });
     try {
       await sendMessage({ text });
@@ -337,7 +346,7 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
           try { sessionStorage.setItem(`workos:scroll:${sessionId}`, String(box.scrollTop)); } catch { /* optional storage */ }
         }} className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-4 pr-1">
           <ol className="space-y-5" aria-label="对话消息">
-            {messages.map((message) => (
+            {displayedMessages.map((message) => (
               <li key={message.id} className={`max-w-[72ch] break-words text-sm leading-7 ${message.role === "user" ? "ml-auto whitespace-pre-wrap border border-line bg-surface px-4 py-3 text-ink" : "text-ink"}`}>
                 <span className="mb-1 block text-xs font-medium text-ink-3">{message.role === "user" ? "你" : "Agent"}</span>
                 {message.role === "user"

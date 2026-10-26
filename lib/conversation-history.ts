@@ -42,6 +42,18 @@ export function toInitialMessages(detail: AgentConversationDetail): WorkosChatMe
   return lastUserIndex === -1 ? grouped : grouped.slice(0, lastUserIndex + 1);
 }
 
+export function preserveReplaySnapshot(messages: WorkosChatMessage[], snapshot: WorkosChatMessage | null): WorkosChatMessage[] {
+  if (!snapshot) return messages;
+  const snapshotLength = JSON.stringify(snapshot.parts).length;
+  let preserved = false;
+  const next = messages.map((message) => {
+    if (message.id !== snapshot.id || JSON.stringify(message.parts).length >= snapshotLength) return message;
+    preserved = true;
+    return snapshot;
+  });
+  return preserved ? next : messages;
+}
+
 export function conversationPartsToUIMessageParts(parts: AgentConversationPart[]): WorkosChatPart[] {
   return parts.flatMap((part): WorkosChatPart[] => {
     if (part.type === "text") return [{ type: "text", text: part.text }];

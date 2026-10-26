@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { toInitialMessages } from "./conversation-history";
+import { preserveReplaySnapshot, toInitialMessages } from "./conversation-history";
 import type { AgentConversationDetail } from "./agent-client";
+import type { WorkosChatMessage } from "./agent-chat-transport";
+
+describe("preserveReplaySnapshot", () => {
+  const user = { id: "u1", role: "user", parts: [{ type: "text", text: "问题" }] } as WorkosChatMessage;
+  const snapshot = { id: "run_1", role: "assistant", parts: [{ type: "text", text: "断线前已经显示的完整回复" }] } as WorkosChatMessage;
+
+  it("重放追上原进度前保留旧回复，追上后切换到新流", () => {
+    const empty = { ...snapshot, parts: [] } as WorkosChatMessage;
+    const partial = { ...snapshot, parts: [{ type: "text", text: "断线前" }] } as WorkosChatMessage;
+    const caughtUp = { ...snapshot, parts: [{ type: "text", text: "断线前已经显示的完整回复，并继续" }] } as WorkosChatMessage;
+
+    expect(preserveReplaySnapshot([user, empty], snapshot)).toEqual([user, snapshot]);
+    expect(preserveReplaySnapshot([user, partial], snapshot)).toEqual([user, snapshot]);
+    const live = [user, caughtUp];
+    expect(preserveReplaySnapshot(live, snapshot)).toBe(live);
+  });
+});
 
 describe("toInitialMessages 轮分组", () => {
   const detail = (messages: unknown[], active = false) => ({ session: { id: "s", title: "t", workspaceId: "w" }, messages, latestRun: active ? { runId: "r", sessionId: "s", status: "running", active: true } : null }) as unknown as AgentConversationDetail;
