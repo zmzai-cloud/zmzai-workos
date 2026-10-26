@@ -172,7 +172,7 @@ export function ConversationView({ recentSessions = [], initial, initialMessages
         const attempt = resumeAttempts.current + 1;
         if (attempt > 6) { setResuming(false); setError("连接中断，自动重连未成功，请稍后刷新页面重试。"); return; }
         setResuming(true);
-        setReplaySnapshot((current) => current ?? last);
+        setReplaySnapshot((current) => !current || JSON.stringify(last.parts).length > JSON.stringify(current.parts).length ? last : current);
         resumeAttempts.current = attempt;
         if (resumeTimer.current) clearTimeout(resumeTimer.current);
         resumeTimer.current = setTimeout(() => { void chat.resumeStream().catch(() => undefined); }, Math.min(1000 * 2 ** (attempt - 1), 30_000));
